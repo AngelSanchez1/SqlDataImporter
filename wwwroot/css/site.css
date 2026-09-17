@@ -1,0 +1,70 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+  color: var(--bs-secondary-color);
+  text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+  text-align: start;
+}
+
+.sdi-navbar {
+    background: linear-gradient(90deg, #0b1f3a, #14335c);
+}
+
+    .sdi-navbar .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: rgba(255, 255, 255, 0.75);
+        font-weight: 500;
+        padding: 0.6rem 1rem !important;
+        border-radius: 8px;
+        transition: all 0.2s ease-in-out;
+    }
+
+        .sdi-navbar .nav-link:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .sdi-navbar .nav-link.active {
+            color: #fff;
+            background: #2e6fdb;
+            font-weight: 600;
+        }
+
+.sdi-badge {
+    color: #9be89b !important;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+}
+
+.sdi-footer {
+    background: #f8f9fa;
+    padding: 1rem 0;
+}

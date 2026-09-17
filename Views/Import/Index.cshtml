@@ -1,0 +1,153 @@
+﻿@model SqlDataImporter.Models.ConnectionRequest
+
+@{
+    ViewData["Title"] = "Importar plantilla";
+}
+
+<link rel="stylesheet" href="~/css/SqlConnection.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/ImportFile.css" asp-append-version="true" />
+
+<div class="hy-wrapper">
+
+    <partial name="_SqlTargetSelector" model="Model" />
+
+
+    <div id="importSection" class="hy-card mt-4 d-none">
+
+        <div class="hy-card-header">
+            <h4 class="hy-title">
+                Importar plantilla
+            </h4>
+        </div>
+
+        <div class="hy-accent-bar"></div>
+
+        <div class="hy-card-body">
+
+            <!-- REGLA -->
+
+            <div id="ruleSection">
+
+                <h6 class="fw-bold">
+                    Regla de importación
+                </h6>
+
+                <p class="text-muted small">
+                    Seleccione las columnas que identifican
+                    de manera única un registro.
+                </p>
+
+                <div class="alert alert-light border">
+
+                    Si ya existe un registro con la misma
+                    combinación de valores seleccionados,
+                    no se insertará nuevamente.
+
+                </div>
+
+                <div id="ruleColumns"
+                     class="mb-4">
+                </div>
+
+            </div>
+
+
+            <hr class="hy-divider" />
+
+
+            <!-- ARCHIVO -->
+
+            <input type="file"
+                   id="importFile"
+                   accept=".xlsx,.csv"
+                   hidden />
+
+            <div id="dropZone"
+                 class="import-dropzone">
+
+                <div class="import-dropzone-icon">
+                    ↑
+                </div>
+
+                <div class="fw-semibold mb-1">
+                    Arrastra aquí tu archivo
+                </div>
+
+                <div class="text-muted small mb-3">
+                    Excel (.xlsx) o CSV (.csv)
+                </div>
+
+                <button type="button"
+                        id="btnSelectFile"
+                        class="btn btn-outline-secondary">
+
+                    Seleccionar archivo
+
+                </button>
+
+            </div>
+
+
+            <div id="selectedFile"
+                 class="import-file-selected mt-3 d-none">
+
+                <div class="import-file-info">
+
+                    <div>
+                        <div id="selectedFileName"
+                             class="fw-semibold">
+                        </div>
+
+                        <div id="selectedFileSize"
+                             class="text-muted small">
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            id="btnRemoveFile"
+                            class="btn btn-sm btn-outline-danger">
+
+                        Quitar
+
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div id="fileError"
+                 class="hy-result hy-result-error mt-3 d-none">
+            </div>
+
+
+            <div class="d-grid mt-3">
+
+                <button type="button"
+                        id="btnValidateImport"
+                        class="btn hy-btn-primary"
+                        disabled>
+
+                    Validar archivo
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@section Scripts {
+
+    <script src="~/js/sql-target-selector.js"
+            asp-append-version="true">
+    </script>
+
+    <script src="~/js/import-template.js"
+            asp-append-version="true">
+    </script>
+
+}

@@ -1,0 +1,190 @@
+﻿:root {
+    --hy-navy: #002C5F;
+    --hy-navy-deep: #001e45;
+    --hy-amber: #E8A33D;
+    --hy-amber-light: #F5CB80;
+    --hy-slate: #6B90B8;
+    --hy-slate-light: #7EB0D4;
+    --hy-bg: #eef1f6;
+    --hy-border: #e0e6ee;
+    --hy-text: #1a2a3a;
+    --hy-text-muted: #5a6a7a;
+    --hy-row-alt: #fafbfc;
+}
+
+body {
+    background: var(--hy-bg);
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+.hy-wrapper {
+    max-width: 560px;
+    margin: 56px auto;
+}
+
+.hy-card {
+    background: #ffffff;
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 44, 95, 0.13);
+}
+
+.hy-card-header {
+    background: var(--hy-navy);
+    padding: 28px 32px 22px;
+    text-align: center;
+}
+
+.hy-eyebrow {
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: var(--hy-slate);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.hy-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 0.3px;
+    margin: 0 0 10PX 0;
+}
+
+.hy-accent-bar {
+    height: 3px;
+    background: linear-gradient(90deg, var(--hy-navy) 0%, var(--hy-amber) 50%, var(--hy-amber-light) 100%);
+}
+
+.hy-card-body {
+    padding: 30px 32px 32px;
+}
+
+/* Indicador de pasos */
+.hy-steps {
+    display: flex;
+    align-items: center;
+    margin-bottom: 28px;
+}
+
+.hy-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.hy-step-circle {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    border-radius: 50%;
+    background: #eef1f6;
+    color: var(--hy-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--hy-border);
+    transition: all 0.2s ease;
+}
+
+.hy-step-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--hy-text-muted);
+    white-space: nowrap;
+}
+
+.hy-step.is-active .hy-step-circle,
+.hy-step.is-done .hy-step-circle {
+    background: var(--hy-amber);
+    border-color: var(--hy-amber);
+    color: #ffffff;
+}
+
+.hy-step.is-active .hy-step-label,
+.hy-step.is-done .hy-step-label {
+    color: var(--hy-navy);
+}
+
+.hy-step-line {
+    flex: 0 0 28px;
+    height: 2px;
+    background: var(--hy-border);
+    margin: 0 6px;
+}
+
+/* Inputs */
+.hy-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--hy-text-muted);
+    margin-bottom: 6px;
+    display: block;
+}
+
+.hy-input,
+.form-select.hy-input {
+    border: 1px solid var(--hy-border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--hy-text);
+    background: #ffffff;
+}
+
+    .hy-input:focus {
+        border-color: var(--hy-amber);
+        box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.18);
+    }
+
+.hy-btn-primary {
+    background: var(--hy-navy);
+    border: none;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 11px 20px;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+}
+
+    .hy-btn-primary:hover:not(:disabled) {
+        background: #013a78;
+        color: #ffffff;
+    }
+
+    .hy-btn-primary:disabled {
+        background: #7f93a8;
+    }
+
+/* Resultado de conexión */
+.hy-result {
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px solid transparent;
+}
+
+    .hy-result.hy-result-ok {
+        background: #f2f8f0;
+        border-color: #cfe6c4;
+        color: #33622a;
+    }
+
+    .hy-result.hy-result-error {
+        background: #fdf1f1;
+        border-color: #f1c9c9;
+        color: #8a2c2c;
+    }
+
+.hy-divider {
+    border: none;
+    border-top: 1px solid var(--hy-border);
+    margin: 24px 0 20px;
+}body {
+}

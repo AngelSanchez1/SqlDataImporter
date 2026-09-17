@@ -1,0 +1,162 @@
+﻿@model SqlDataImporter.Models.ConnectionRequest
+
+<div class="hy-card">
+
+     <div class="hy-card-header">
+        <img src="~/img/Icono.png"
+             asp-append-version="true"
+             alt="SqlDataImporter"
+             style="max-height:100px; display:block; margin:0 auto 0;" />
+        <h4 class="hy-title">Importador de Datos SQL</h4>
+        <div class="hy-eyebrow">Excel y CSV</div>
+    </div>
+
+    <div class="hy-accent-bar"></div>
+
+    <div class="hy-card-body">
+
+        <div class="hy-steps">
+
+            <div class="hy-step is-active"
+                 id="stepConectar">
+
+                <div class="hy-step-circle">1</div>
+                <div class="hy-step-label">
+                    Conectar
+                </div>
+
+            </div>
+
+            <div class="hy-step-line"></div>
+
+            <div class="hy-step"
+                 id="stepBaseDatos">
+
+                <div class="hy-step-circle">2</div>
+                <div class="hy-step-label">
+                    Base de datos
+                </div>
+
+            </div>
+
+            <div class="hy-step-line"></div>
+
+            <div class="hy-step"
+                 id="stepTabla">
+
+                <div class="hy-step-circle">3</div>
+                <div class="hy-step-label">
+                    Tabla
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <form id="connectionForm"
+              data-test-url="@Url.Action("TestConnection", "Connection")"
+              data-tables-url="@Url.Action("GetTables", "Connection")">
+
+            <div class="mb-3">
+
+                <label asp-for="Server"
+                       class="hy-label">
+                    Servidor
+                </label>
+
+                <input asp-for="Server"
+                       class="form-control hy-input"
+                       autocomplete="off" />
+
+            </div>
+
+            <div class="mb-3">
+
+                <label asp-for="User"
+                       class="hy-label">
+                    Usuario
+                </label>
+
+                <input asp-for="User"
+                       class="form-control hy-input"
+                       autocomplete="off" />
+
+            </div>
+
+            <div class="mb-3">
+
+                <label asp-for="Password"
+                       class="hy-label">
+                    Contraseña
+                </label>
+
+                <input asp-for="Password"
+                       type="password"
+                       class="form-control hy-input"
+                       autocomplete="off" />
+
+            </div>
+
+            <div class="d-grid">
+
+                <button type="submit"
+                        id="btnTestConnection"
+                        class="btn hy-btn-primary">
+
+                    Probar conexión
+
+                </button>
+
+            </div>
+
+        </form>
+
+
+        <div id="connectionResult"
+             class="hy-result mt-3 d-none">
+        </div>
+
+
+        <div id="databaseSection"
+             class="mt-4 d-none">
+
+            <hr class="hy-divider" />
+
+            <label class="hy-label">
+                Base de datos
+            </label>
+
+            <select id="databaseSelect"
+                    class="form-select hy-input">
+
+                <option value="">
+                    Seleccione una base de datos
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <div id="tableSection"
+             class="mt-3 d-none">
+
+            <label class="hy-label">
+                Tabla
+            </label>
+
+            <select id="tableSelect"
+                    class="form-select hy-input">
+
+                <option value="">
+                    Seleccione una tabla
+                </option>
+
+            </select>
+
+        </div>
+
+    </div>
+
+</div>

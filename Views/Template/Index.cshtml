@@ -1,0 +1,80 @@
+﻿@model SqlDataImporter.Models.ConnectionRequest
+
+@{
+    ViewData["Title"] = "Descargar plantilla";
+}
+
+<link rel="stylesheet"
+      href="~/css/SqlConnection.css"
+      asp-append-version="true" />
+
+<div class="hy-wrapper">
+
+    <partial name="_SqlTargetSelector"
+             model="Model" />
+
+
+    <div id="layoutSection"
+         class="hy-card mt-4 d-none">
+
+        <div class="hy-card-header">
+
+            <h4 class="hy-title">
+                Descargar plantilla
+            </h4>
+
+        </div>
+
+        <div class="hy-card-body">
+
+            <div class="mb-3">
+
+                <label class="hy-label">
+                    Formato
+                </label>
+
+                <select id="layoutFormat"
+                        class="form-select hy-input">
+
+                    <option value="xlsx">
+                        Excel (.xlsx)
+                    </option>
+
+                    <option value="csv">
+                        CSV (.csv)
+                    </option>
+
+                </select>
+
+            </div>
+
+            <div class="d-grid">
+
+                <button type="button"
+                        id="btnDownloadLayout"
+                        class="btn hy-btn-primary"
+                        data-download-url="@Url.Action("Download", "Layout")">
+
+                    Descargar plantilla
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@section Scripts {
+
+    <script src="~/js/sql-target-selector.js"
+            asp-append-version="true">
+    </script>
+
+    <script src="~/js/template-download.js"
+            asp-append-version="true">
+    </script>
+
+}

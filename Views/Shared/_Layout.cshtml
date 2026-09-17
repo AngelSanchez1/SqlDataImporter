@@ -1,0 +1,163 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="utf-8" />
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0" />
+
+    <title>
+        @ViewData["Title"] - SqlDataImporter
+    </title>
+
+    <script type="importmap"></script>
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+    <link rel="stylesheet"
+          href="~/css/site.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/SqlDataImporter.styles.css"
+          asp-append-version="true" />
+
+</head>
+
+<body>
+
+    @{
+        // Helper para saber qué controlador/acción está activo
+        string currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+
+        Func<string, string> isActive = (controllerName) =>
+            currentController.Equals(controllerName, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+    }
+
+    <header>
+
+        <nav class="navbar navbar-expand-lg navbar-dark shadow-sm sdi-navbar">
+
+            <div class="container">
+
+                <a class="navbar-brand fw-bold d-flex align-items-center gap-2"
+                   asp-controller="Template"
+                   asp-action="Index">
+
+                    <i class="fa-solid fa-database"></i>
+                    SqlDataImporter
+
+                </a>
+
+                <button class="navbar-toggler"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#mainNavbar"
+                        aria-controls="mainNavbar"
+                        aria-expanded="false"
+                        aria-label="Mostrar menú">
+
+                    <span class="navbar-toggler-icon"></span>
+
+                </button>
+
+                <div class="collapse navbar-collapse"
+                     id="mainNavbar">
+
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                        <li class="nav-item">
+                            <a class="nav-link @isActive("Template")"
+                               asp-controller="Template"
+                               asp-action="Index">
+
+                                <i class="fa-solid fa-file-excel"></i>
+                                Descargar plantilla
+
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link @isActive("Import")"
+                               asp-controller="Import"
+                               asp-action="Index">
+
+                                <i class="fa-solid fa-upload"></i>
+                                Importar plantilla
+
+                            </a>
+                        </li>
+
+                        @* Descomenta a medida que vayas activando estos módulos *@
+
+                        @* <li class="nav-item">
+                            <a class="nav-link @isActive("Export")"
+                               asp-controller="Export"
+                               asp-action="Index">
+                                <i class="fa-solid fa-download"></i>
+                                Exportar
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link @isActive("History")"
+                               asp-controller="History"
+                               asp-action="Index">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                Historial
+                            </a>
+                        </li> *@
+
+                    </ul>
+
+                </div>
+
+            </div>
+
+        </nav>
+
+    </header>
+
+
+    <div class="container mt-4">
+
+        <main role="main"
+              class="pb-4">
+
+            @RenderBody()
+
+        </main>
+
+    </div>
+
+
+    <footer class="border-top footer text-muted sdi-footer">
+
+        <div class="container">
+            &copy; 2026 - SqlDataImporter
+        </div>
+
+    </footer>
+
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="~/js/site.js"
+            asp-append-version="true"></script>
+
+    @await RenderSectionAsync(
+        "Scripts",
+        required: false
+    )
+
+</body>
+
+</html>

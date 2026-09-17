@@ -1,0 +1,714 @@
+﻿@model SqlDataImporter.Models.ConnectionRequest
+
+@{
+    ViewData["Title"] = "Conexión SQL Server";
+}
+
+<link rel="stylesheet" href="~/css/SqlConnection.css" asp-append-version="true" />
+
+<div class="hy-wrapper">
+
+    <div class="hy-card">
+
+        <div class="hy-card-header">
+            <img src="https://www.afhyundai.mx/img/images/logo.png?d=20250410174251"
+                 alt="Autofinanciamiento Hyundai"
+                 style="max-height:48px; display:block; margin:0 auto 14px; background-color:white;" />
+            <div class="hy-eyebrow">Autofinanciamiento Hyundai</div>
+            <h4 class="hy-title">Importador de Datos SQL</h4>
+        </div>
+
+        <div class="hy-accent-bar"></div>
+
+        <div class="hy-card-body">
+
+            <div class="hy-steps" id="hySteps">
+
+                <div class="hy-step is-active" id="stepConectar">
+                    <div class="hy-step-circle">1</div>
+                    <div class="hy-step-label">Conectar</div>
+                </div>
+
+                <div class="hy-step-line"></div>
+
+                <div class="hy-step" id="stepBaseDatos">
+                    <div class="hy-step-circle">2</div>
+                    <div class="hy-step-label">Base de datos</div>
+                </div>
+
+                <div class="hy-step-line"></div>
+
+                <div class="hy-step" id="stepTabla">
+                    <div class="hy-step-circle">3</div>
+                    <div class="hy-step-label">Tabla</div>
+                </div>
+
+            </div>
+
+            <form id="connectionForm">
+
+                <div class="mb-3">
+
+                    <label asp-for="Server" class="hy-label">
+                        Servidor
+                    </label>
+
+                    <input asp-for="Server"
+                           class="form-control hy-input"
+                           placeholder="Ej. SERVER01 o 192.168.1.100"
+                           autocomplete="off" />
+
+                </div>
+
+                <div class="mb-3">
+
+                    <label asp-for="User" class="hy-label">
+                        Usuario
+                    </label>
+
+                    <input asp-for="User"
+                           class="form-control hy-input"
+                           placeholder="Ej. sa"
+                           autocomplete="off" />
+
+                </div>
+
+                <div class="mb-3">
+
+                    <label asp-for="Password" class="hy-label">
+                        Contraseña
+                    </label>
+
+                    <input asp-for="Password"
+                           type="password"
+                           class="form-control hy-input"
+                           placeholder="Contraseña"
+                           autocomplete="off" />
+
+                </div>
+
+                <div class="d-grid">
+
+                    <button type="submit"
+                            id="btnTestConnection"
+                            class="btn hy-btn-primary">
+
+                        Probar conexión
+
+                    </button>
+
+                </div>
+
+            </form>
+
+            <div id="connectionResult" class="hy-result mt-3 d-none"></div>
+
+            <div id="databaseSection" class="mt-4 d-none">
+
+                <hr class="hy-divider" />
+
+                <div class="mb-3">
+
+                    <label for="databaseSelect" class="hy-label">
+                        Base de datos
+                    </label>
+
+                    <select id="databaseSelect" class="form-select hy-input">
+
+                        <option value="">
+                            Seleccione una base de datos
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+            <div id="tableSection" class="mt-3 d-none">
+
+                <div class="mb-3">
+
+                    <label for="tableSelect" class="hy-label">
+                        Tabla
+                    </label>
+
+                    <select id="tableSelect" class="form-select hy-input">
+
+                        <option value="">
+                            Seleccione una tabla
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+            <div id="layoutSection"
+                 class="mt-4 d-none">
+
+                <hr class="hy-divider" />
+
+                <div class="mb-3">
+
+                    <label class="hy-label">
+                        Formato del layout
+                    </label>
+
+                    <select id="layoutFormat"
+                            class="form-select hy-input">
+
+                        <option value="xlsx">
+                            Excel (.xlsx)
+                        </option>
+
+                        <option value="csv">
+                            CSV (.csv)
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div class="d-grid">
+
+                    <button type="button"
+                            id="btnDownloadLayout"
+                            class="btn hy-btn-primary">
+
+                        Descargar layout
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@section Scripts {
+
+    <script>
+
+        const connectionForm =
+            document.getElementById("connectionForm");
+
+        const btnTestConnection =
+            document.getElementById("btnTestConnection");
+
+        const connectionResult =
+            document.getElementById("connectionResult");
+
+        const databaseSection =
+            document.getElementById("databaseSection");
+
+        const databaseSelect =
+            document.getElementById("databaseSelect");
+
+        const tableSection =
+            document.getElementById("tableSection");
+
+        const tableSelect =
+            document.getElementById("tableSelect");
+
+        const stepConectar =
+            document.getElementById("stepConectar");
+
+        const stepBaseDatos =
+            document.getElementById("stepBaseDatos");
+
+        const stepTabla =
+            document.getElementById("stepTabla");
+
+        const layoutSection =
+            document.getElementById("layoutSection");
+
+        const layoutFormat =
+            document.getElementById("layoutFormat");
+
+        const btnDownloadLayout =
+            document.getElementById("btnDownloadLayout");
+
+
+        // ==========================================
+        // PROBAR CONEXIÓN
+        // ==========================================
+
+        connectionForm.addEventListener(
+            "submit",
+            async function(event) {
+
+                event.preventDefault();
+
+                limpiarBasesDatos();
+                limpiarTablas();
+
+                btnTestConnection.disabled = true;
+                btnTestConnection.innerText = "Conectando...";
+
+                connectionResult.classList.add("d-none");
+
+                const formData =
+                    new FormData(connectionForm);
+
+                try {
+
+                    const response =
+                        await fetch(
+                            '@Url.Action("TestConnection", "Connection")',
+                            {
+                                method: "POST",
+                                body: formData
+                            }
+                        );
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            `Error HTTP ${response.status}`
+                        );
+
+                    }
+
+                    const data =
+                        await response.json();
+
+                    connectionResult.classList.remove(
+                        "d-none",
+                        "hy-result-ok",
+                        "hy-result-error"
+                    );
+
+                    if (data.success) {
+
+                        connectionResult.classList.add(
+                            "hy-result-ok"
+                        );
+
+                        stepConectar.classList.add("is-done");
+                        stepConectar.classList.remove("is-active");
+                        stepBaseDatos.classList.add("is-active");
+
+                        cargarBasesDatos(
+                            data.databases
+                        );
+
+                    }
+                    else {
+
+                        connectionResult.classList.add(
+                            "hy-result-error"
+                        );
+
+                    }
+
+                    connectionResult.innerText =
+                        data.message;
+
+                }
+                catch (error) {
+
+                    console.error(error);
+
+                    connectionResult.classList.remove(
+                        "d-none",
+                        "hy-result-ok"
+                    );
+
+                    connectionResult.classList.add(
+                        "hy-result-error"
+                    );
+
+                    connectionResult.innerText =
+                        "Ocurrió un error al intentar conectar: "
+                        + error.message;
+
+                }
+                finally {
+
+                    btnTestConnection.disabled = false;
+
+                    btnTestConnection.innerText =
+                        "Probar conexión";
+
+                }
+
+            }
+        );
+
+
+        // ==========================================
+        // CAMBIO DE BASE DE DATOS
+        // ==========================================
+
+        databaseSelect.addEventListener(
+            "change",
+            async function() {
+
+                const database =
+                    this.value;
+
+                limpiarTablas();
+
+                if (!database) {
+                    stepBaseDatos.classList.remove("is-done");
+                    stepTabla.classList.remove("is-active");
+                    return;
+                }
+
+                stepBaseDatos.classList.add("is-done");
+                stepTabla.classList.add("is-active");
+
+                await loadTables(database);
+
+            }
+        );
+
+
+        // ==========================================
+        // CARGAR BASES DE DATOS
+        // ==========================================
+
+        function cargarBasesDatos(databases) {
+
+            databaseSelect.innerHTML =
+                '<option value="">Seleccione una base de datos</option>';
+
+            databases.forEach(function(database) {
+
+                const option =
+                    document.createElement("option");
+
+                option.value =
+                    database;
+
+                option.textContent =
+                    database;
+
+                databaseSelect.appendChild(
+                    option
+                );
+
+            });
+
+            databaseSection.classList.remove(
+                "d-none"
+            );
+
+        }
+
+
+        // ==========================================
+        // CARGAR TABLAS
+        // ==========================================
+
+        async function loadTables(database) {
+
+            const formData =
+                new FormData(connectionForm);
+
+            formData.append(
+                "Database",
+                database
+            );
+
+            try {
+
+                databaseSelect.disabled = true;
+                tableSelect.disabled = true;
+
+                tableSelect.innerHTML =
+                    '<option value="">Cargando tablas...</option>';
+
+                tableSection.classList.remove(
+                    "d-none"
+                );
+
+                const response =
+                    await fetch(
+                        '@Url.Action("GetTables", "Connection")',
+                        {
+                            method: "POST",
+                            body: formData
+                        }
+                    );
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        `Error HTTP ${response.status}`
+                    );
+
+                }
+
+                const data =
+                    await response.json();
+
+                if (!data.success) {
+
+                    throw new Error(
+                        data.message
+                    );
+
+                }
+
+                tableSelect.innerHTML =
+                    '<option value="">Seleccione una tabla</option>';
+
+                data.tables.forEach(function(table) {
+
+                    const option =
+                        document.createElement("option");
+
+                    option.value =
+                        table.fullName;
+
+                    option.textContent =
+                        table.fullName;
+
+                    option.dataset.schema =
+                        table.schema;
+
+                    option.dataset.table =
+                        table.name;
+
+                    tableSelect.appendChild(
+                        option
+                    );
+
+                });
+
+            }
+            catch (error) {
+
+                console.error(error);
+
+                limpiarTablas();
+
+                alert(
+                    "No fue posible obtener las tablas: "
+                    + error.message
+                );
+
+            }
+            finally {
+
+                databaseSelect.disabled = false;
+                tableSelect.disabled = false;
+
+            }
+
+        }
+
+
+        // ==========================================
+        // LIMPIAR BASES
+        // ==========================================
+
+        function limpiarBasesDatos() {
+
+            databaseSelect.innerHTML = '<option value="">Seleccione una base de datos</option>';
+
+            databaseSection.classList.add(
+                "d-none"
+            );
+
+            tableSection.classList.add(
+                "d-none"
+            );
+
+            layoutSection.classList.add(
+                "d-none"
+            );
+
+            stepConectar.classList.remove(
+                "is-done"
+            );
+
+            stepBaseDatos.classList.remove(
+                "is-active",
+                "is-done"
+            );
+
+            stepTabla.classList.remove(
+                "is-active",
+                "is-done"
+            );
+        }
+
+
+        // ==========================================
+        // LIMPIAR TABLAS
+        // ==========================================
+
+        function limpiarTablas() {
+
+            tableSelect.innerHTML =
+                '<option value="">Seleccione una tabla</option>';
+
+            tableSection.classList.add(
+                "d-none"
+            );
+
+            layoutSection.classList.add(
+                "d-none"
+            );
+
+            stepTabla.classList.remove(
+                "is-active",
+                "is-done"
+            );
+        }
+
+        tableSelect.addEventListener(
+            "change",
+            function() {
+
+                if (!this.value) {
+
+                    stepTabla.classList.remove(
+                            "is-done"
+                        );
+
+                    layoutSection.classList.add(
+                        "d-none"
+                    );
+
+                    return;
+                }
+
+                stepTabla.classList.add(
+                    "is-done"
+                );
+
+                layoutSection.classList.remove(
+                    "d-none"
+                );
+
+            }
+        );
+
+        btnDownloadLayout.addEventListener(
+            "click",
+            async function() {
+
+                const selectedOption =
+                    tableSelect.options[
+                    tableSelect.selectedIndex
+                    ];
+
+                if (!selectedOption.value) {
+                    return;
+                }
+
+                const schema =
+                    selectedOption.dataset.schema;
+
+                const table =
+                    selectedOption.dataset.table;
+
+                const database =
+                    databaseSelect.value;
+
+                const format =
+                    layoutFormat.value;
+
+                const formData =
+                    new FormData(connectionForm);
+
+                formData.append(
+                    "Database",
+                    database);
+
+                formData.append(
+                    "Schema",
+                    schema);
+
+                formData.append(
+                    "Table",
+                    table);
+
+                formData.append(
+                    "Format",
+                    format);
+
+                try {
+
+                    btnDownloadLayout.disabled = true;
+
+                    btnDownloadLayout.innerText =
+                        "Generando layout...";
+
+                    const response =
+                        await fetch(
+                            '@Url.Action("Download", "Layout")',
+                            {
+                                method: "POST",
+                                body: formData
+                            });
+
+                    if (!response.ok) {
+
+                        const message =
+                            await response.text();
+
+                        throw new Error(
+                            message);
+                    }
+
+                    const blob =
+                        await response.blob();
+
+                    const url =
+                        window.URL.createObjectURL(
+                            blob);
+
+                    const link =
+                        document.createElement("a");
+
+                    link.href =
+                        url;
+
+                    link.download =
+                        table
+                        + "_Layout."
+                        + format;
+
+                    document.body.appendChild(
+                        link);
+
+                    link.click();
+
+                    link.remove();
+
+                    window.URL.revokeObjectURL(
+                        url);
+
+                }
+                catch (error) {
+
+                    console.error(error);
+
+                    alert(
+                        "No fue posible generar el layout: "
+                        + error.message);
+
+                }
+                finally {
+
+                    btnDownloadLayout.disabled = false;
+
+                    btnDownloadLayout.innerText = "Descargar layout";
+                }
+
+            }
+        );
+
+    </script>
+
+}
