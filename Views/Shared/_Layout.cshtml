@@ -1,4 +1,14 @@
-﻿<!DOCTYPE html>
+﻿@using System.Reflection
+
+@{
+    var version = Assembly
+        .GetEntryAssembly()?
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+        .InformationalVersion
+        ?? "N/A";
+}
+
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -140,7 +150,7 @@
     <footer class="border-top footer text-muted sdi-footer">
 
         <div class="container">
-            &copy; 2026 - SqlDataImporter
+            &copy; 2026 - SqlDataImporter v-@version
         </div>
 
     </footer>
