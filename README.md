@@ -19,7 +19,7 @@ Elimina la necesidad de escribir scripts SQL manuales o mantener plantillas est�
 - ASP.NET Core MVC
 - SQL Server
 - Bootstrap 5
-- EPPlus / ClosedXML (o la librería que estés usando para Excel)
+- ClosedXML
 
 ## Flujo de uso
 
