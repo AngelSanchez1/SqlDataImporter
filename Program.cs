@@ -10,6 +10,8 @@ builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation();
 builder.Services.AddScoped<ISqlConnectionService, SqlConnectionService>();
 builder.Services.AddScoped<IDatabaseMetadataService, DatabaseMetadataService>();
 builder.Services.AddScoped<ILayoutService, LayoutService>();
+builder.Services.AddScoped<ISqlImportService, SqlImportService>();
+builder.Services.AddScoped<IImportFileReaderService, ImportFileReaderService>();
 #endregion
 
 var app = builder.Build();

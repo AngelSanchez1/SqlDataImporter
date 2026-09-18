@@ -3,50 +3,28 @@
     let selectedDatabase = null;
     let selectedSchema = null;
     let selectedTable = null;
-
     let selectedImportFile = null;
+    let importValidated = false;
 
-
-    const importSection =
-        document.getElementById("importSection");
-
-    const ruleColumns =
-        document.getElementById("ruleColumns");
-
-    const connectionForm =
-        document.getElementById("connectionForm");
+    const importSection = document.getElementById("importSection");
+    const ruleColumns = document.getElementById("ruleColumns");
+    const connectionForm = document.getElementById("connectionForm");
+    const btnExecuteImport = document.getElementById("btnExecuteImport");
 
 
     // ==========================================
     // DROPZONE
     // ==========================================
 
-    const importFile =
-        document.getElementById("importFile");
-
-    const dropZone =
-        document.getElementById("dropZone");
-
-    const btnSelectFile =
-        document.getElementById("btnSelectFile");
-
-    const selectedFile =
-        document.getElementById("selectedFile");
-
-    const selectedFileName =
-        document.getElementById("selectedFileName");
-
-    const selectedFileSize =
-        document.getElementById("selectedFileSize");
-
-    const btnRemoveFile =
-        document.getElementById("btnRemoveFile");
-
-    const fileError =
-        document.getElementById("fileError");
-
-    const btnValidateImport =
-        document.getElementById("btnValidateImport");
+    const importFile = document.getElementById("importFile");
+    const dropZone = document.getElementById("dropZone");
+    const btnSelectFile = document.getElementById("btnSelectFile");
+    const selectedFile = document.getElementById("selectedFile");
+    const selectedFileName = document.getElementById("selectedFileName");
+    const selectedFileSize = document.getElementById("selectedFileSize");
+    const btnRemoveFile = document.getElementById("btnRemoveFile");
+    const fileError = document.getElementById("fileError");
+    const btnValidateImport = document.getElementById("btnValidateImport");
 
 
     // ==========================================
@@ -57,20 +35,17 @@
         "sqlTargetSelected",
         async function (event) {
 
-            selectedDatabase =
-                event.detail.database;
-
-            selectedSchema =
-                event.detail.schema;
-
-            selectedTable =
-                event.detail.table;
+            selectedDatabase = event.detail.database;
+            selectedSchema = event.detail.schema;
+            selectedTable = event.detail.table;
 
             limpiarArchivo();
 
             importSection.classList.remove(
                 "d-none"
             );
+
+            actualizarEstadoValidacion();
 
             await loadColumns();
         }
@@ -231,68 +206,39 @@
     // PROCESAR ARCHIVO
     // ==========================================
 
-    function procesarArchivoSeleccionado(
-        file
-    ) {
-
+    function procesarArchivoSeleccionado(file) {
+        invalidarValidacion();
         limpiarErrorArchivo();
 
         if (!file) {
             return;
         }
 
+        const extension = obtenerExtension(file.name);
 
-        const extension =
-            obtenerExtension(
-                file.name
-            );
-
-
-        if (
-            extension !== "xlsx" &&
-            extension !== "csv"
-        ) {
-
+        if (extension !== "xlsx" && extension !== "csv") {
             limpiarArchivo();
-
-            mostrarErrorArchivo(
-                "El archivo debe ser Excel (.xlsx) o CSV (.csv)."
-            );
-
+            mostrarErrorArchivo("El archivo debe ser Excel (.xlsx) o CSV (.csv).");
             return;
         }
 
 
         // Opcional: límite de 20 MB
-        const maxFileSize =
-            20 * 1024 * 1024;
+        const maxFileSize = 20 * 1024 * 1024;
 
-        if (
-            file.size > maxFileSize
-        ) {
-
+        if (file.size > maxFileSize) {
             limpiarArchivo();
-
-            mostrarErrorArchivo(
-                "El archivo no puede superar los 20 MB."
-            );
-
+            mostrarErrorArchivo("El archivo no puede superar los 20 MB.");
             return;
         }
 
 
-        selectedImportFile =
-            file;
+        selectedImportFile = file;
 
 
-        selectedFileName.textContent =
-            file.name;
+        selectedFileName.textContent = file.name;
 
-        selectedFileSize.textContent =
-            formatearTamanoArchivo(
-                file.size
-            );
-
+        selectedFileSize.textContent = formatearTamanoArchivo(file.size);
 
         selectedFile.classList.remove(
             "d-none"
@@ -302,9 +248,7 @@
             "has-file"
         );
 
-
-        btnValidateImport.disabled =
-            false;
+        actualizarEstadoValidacion();
     }
 
 
@@ -314,17 +258,10 @@
 
     function limpiarArchivo() {
 
-        selectedImportFile =
-            null;
-
-        importFile.value =
-            "";
-
-        selectedFileName.textContent =
-            "";
-
-        selectedFileSize.textContent =
-            "";
+        selectedImportFile = null;
+        importFile.value = "";
+        selectedFileName.textContent = "";
+        selectedFileSize.textContent = "";
 
         selectedFile.classList.add(
             "d-none"
@@ -335,9 +272,7 @@
             "is-dragging"
         );
 
-        btnValidateImport.disabled =
-            true;
-
+        actualizarEstadoValidacion();
         limpiarErrorArchivo();
     }
 
@@ -346,13 +281,8 @@
     // ERROR ARCHIVO
     // ==========================================
 
-    function mostrarErrorArchivo(
-        message
-    ) {
-
-        fileError.textContent =
-            message;
-
+    function mostrarErrorArchivo(message) {
+        fileError.textContent = message;
         fileError.classList.remove(
             "d-none"
         );
@@ -360,10 +290,7 @@
 
 
     function limpiarErrorArchivo() {
-
-        fileError.textContent =
-            "";
-
+        fileError.textContent = "";
         fileError.classList.add(
             "d-none"
         );
@@ -374,22 +301,15 @@
     // EXTENSIÓN
     // ==========================================
 
-    function obtenerExtension(
-        fileName
-    ) {
+    function obtenerExtension(fileName) {
 
-        const parts =
-            fileName.split(".");
+        const parts = fileName.split(".");
 
-        if (
-            parts.length < 2
-        ) {
+        if (parts.length < 2) {
             return "";
         }
 
-        return parts
-            .pop()
-            .toLowerCase();
+        return parts.pop().toLowerCase();
     }
 
 
@@ -397,9 +317,7 @@
     // TAMAÑO LEGIBLE
     // ==========================================
 
-    function formatearTamanoArchivo(
-        bytes
-    ) {
+    function formatearTamanoArchivo(bytes) {
 
         if (bytes === 0) {
             return "0 bytes";
@@ -444,10 +362,7 @@
 
     async function loadColumns() {
 
-        const formData =
-            new FormData(
-                connectionForm
-            );
+        const formData = new FormData(connectionForm);
 
         formData.append(
             "Database",
@@ -476,32 +391,19 @@
                 );
 
             if (!response.ok) {
-
-                throw new Error(
-                    `Error HTTP ${response.status}`
-                );
+                throw new Error(`Error HTTP ${response.status}`);
             }
 
-            const data =
-                await response.json();
+            const data = await response.json();
 
             if (!data.success) {
-
-                throw new Error(
-                    data.message
-                );
+                throw new Error(data.message);
             }
 
-            renderRuleColumns(
-                data.columns
-            );
-
+            renderRuleColumns(data.columns);
         }
         catch (error) {
-
-            console.error(error);
-
-            alert(
+            AppAlert.error(
                 "No fue posible obtener las columnas: "
                 + error.message
             );
@@ -513,9 +415,7 @@
     // MOSTRAR COLUMNAS REGLA
     // ==========================================
 
-    function renderRuleColumns(
-        columns
-    ) {
+    function renderRuleColumns(columns) {
 
         ruleColumns.innerHTML =
             "";
@@ -567,8 +467,346 @@
                 ruleColumns.appendChild(
                     wrapper
                 );
+
+                actualizarEstadoValidacion();
             }
         );
     }
 
+    ruleColumns.addEventListener(
+        "change",
+        function (event) {
+
+            if (
+                event.target.classList.contains(
+                    "rule-column"
+                )
+            ) {
+                invalidarValidacion();
+                actualizarEstadoValidacion();
+            }
+        }
+    );
+
+    function actualizarEstadoValidacion() {
+
+        const rules = obtenerColumnasRegla();
+
+        const tieneDestino =
+            !!(
+                selectedDatabase &&
+                selectedSchema &&
+                selectedTable
+            );
+
+        const tieneRegla =
+            rules.length > 0;
+
+        const tieneArchivo =
+            selectedImportFile !== null;
+
+
+        actualizarRequisito(
+            "requirementTarget",
+            "requirementTargetText",
+            tieneDestino,
+            tieneDestino
+                ? `Tabla: ${selectedSchema}.${selectedTable}`
+                : "Seleccione una tabla"
+        );
+
+
+        actualizarRequisito(
+            "requirementRule",
+            "requirementRuleText",
+            tieneRegla,
+            tieneRegla
+                ? `Regla: ${rules.join(" + ")}`
+                : "Seleccione al menos una columna para la regla"
+        );
+
+
+        actualizarRequisito(
+            "requirementFile",
+            "requirementFileText",
+            tieneArchivo,
+            tieneArchivo
+                ? `Archivo: ${selectedImportFile.name}`
+                : "Seleccione un archivo Excel o CSV"
+        );
+
+
+        const ready = tieneDestino && tieneRegla && tieneArchivo;
+
+        btnValidateImport.disabled = !ready;
+    }
+
+    function actualizarRequisito(containerId, textId, completed, text) {
+
+        const container = document.getElementById(containerId);
+        const textElement = document.getElementById(textId);
+        const icon = container.querySelector(".requirement-icon");
+        textElement.textContent = text;
+
+        container.classList.remove(
+            "text-muted",
+            "text-success"
+        );
+
+        if (completed) {
+            container.classList.add(
+                "text-success"
+            );
+            icon.textContent = "✓";
+        }
+        else {
+            container.classList.add(
+                "text-muted"
+            );
+            icon.textContent = "○";
+        }
+    }
+
+    function obtenerColumnasRegla() {
+
+        return Array
+            .from(
+                ruleColumns.querySelectorAll(
+                    ".rule-column:checked"
+                )
+            )
+            .map(
+                checkbox => checkbox.value
+            );
+    }
+
+    btnValidateImport.addEventListener(
+        "click",
+        async function () {
+
+            const ruleColumnsSelected = obtenerColumnasRegla();
+
+            if (
+                !selectedDatabase ||
+                !selectedSchema ||
+                !selectedTable ||
+                !selectedImportFile ||
+                ruleColumnsSelected.length === 0
+            ) {
+                return;
+            }
+
+            const formData = new FormData(connectionForm);
+
+            formData.append(
+                "Database",
+                selectedDatabase
+            );
+
+            formData.append(
+                "Schema",
+                selectedSchema
+            );
+
+            formData.append(
+                "Table",
+                selectedTable
+            );
+
+            ruleColumnsSelected.forEach(
+                column => {
+
+                    formData.append(
+                        "RuleColumns",
+                        column
+                    );
+                }
+            );
+
+            formData.append(
+                "File",
+                selectedImportFile
+            );
+
+
+            try {
+
+                btnValidateImport.disabled = true;
+                btnValidateImport.innerText = "Validando archivo...";
+
+                const response =
+                    await fetch(
+                        "/Import/Validate",
+                        {
+                            method: "POST",
+                            body: formData
+                        }
+                    );
+
+
+                const data = await response.json();
+
+
+                if (!response.ok) {
+
+                    throw new Error(data.message ||`Error HTTP ${response.status}`);
+                }
+
+
+                if (!data.success) {
+
+                    throw new Error(data.message);
+                }
+
+                importValidated = true;
+
+                btnExecuteImport.classList.remove(
+                    "d-none"
+                );
+
+                AppAlert.success(
+                    "Validación correcta",
+                    "La plantilla corresponde a la tabla seleccionada."
+                );
+
+            }
+            catch (error) {
+                AppAlert.warning("No fue posible validar el archivo: " + error.message);
+            }
+            finally {
+
+                btnValidateImport.disabled = false;
+                btnValidateImport.innerText = "Validar archivo";
+                actualizarEstadoValidacion();
+            }
+        }
+    );
+
+    function invalidarValidacion() {
+
+        importValidated = false;
+
+        btnExecuteImport.classList.add(
+            "d-none"
+        );
+    }
+
+    btnExecuteImport.addEventListener(
+        "click",
+        async function () {
+
+            if (!importValidated) {
+                return;
+            }
+
+            const confirmation =
+                await AppAlert.confirm(
+                    "¿Importar registros?",
+                    `Los nuevos registros serán insertados en ${selectedSchema}.${selectedTable}.`,
+                    "Sí, importar",
+                    "Cancelar"
+                );
+
+            if (!confirmation.isConfirmed) {
+                return;
+            }
+
+
+            const formData = new FormData(connectionForm);
+
+            formData.append(
+                "Database",
+                selectedDatabase
+            );
+
+            formData.append(
+                "Schema",
+                selectedSchema
+            );
+
+            formData.append(
+                "Table",
+                selectedTable
+            );
+
+
+            obtenerColumnasRegla()
+                .forEach(
+                    column => {
+
+                        formData.append(
+                            "RuleColumns",
+                            column
+                        );
+
+                    });
+
+
+            formData.append(
+                "File",
+                selectedImportFile
+            );
+
+
+            try {
+                AppAlert.loading("Importando registros", "No cierre esta ventana.");
+
+                const response =
+                    await fetch(
+                        "/Import/Execute",
+                        {
+                            method: "POST",
+                            body: formData
+                        }
+                    );
+
+                const data = await response.json();
+
+                AppAlert.close();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || `Error HTTP ${response.status}`);
+                }
+
+
+                await Swal.fire({
+                    icon: "success",
+                    title: "Importación completada",
+                    html: `
+                        <div class="text-start">
+
+                            <div>
+                                <strong>Total archivo:</strong>
+                                ${data.totalRows}
+                            </div>
+
+                            <div>
+                                <strong>Insertados:</strong>
+                                ${data.insertedRows}
+                            </div>
+
+                            <div>
+                                <strong>Ya existentes:</strong>
+                                ${data.existingRows}
+                            </div>
+
+                            <div>
+                                <strong>Duplicados en archivo:</strong>
+                                ${data.duplicateRows}
+                            </div>
+
+                        </div>
+                    `,
+
+                    confirmButtonText: "Aceptar"
+
+                });
+
+            }
+            catch (error) {
+                AppAlert.close();
+                await AppAlert.error("Error al importar", error.message);
+            }
+        }
+    );
 })();
