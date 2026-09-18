@@ -1,8 +1,8 @@
 ﻿:root {
     --hy-navy: #002C5F;
     --hy-navy-deep: #001e45;
-    --hy-amber: #E8A33D;
-    --hy-amber-light: #F5CB80;
+    --hy-teal: #2CA6A4;
+    --hy-teal-light: #7DD3D1;
     --hy-slate: #6B90B8;
     --hy-slate-light: #7EB0D4;
     --hy-bg: #eef1f6;
@@ -54,7 +54,7 @@ body {
 
 .hy-accent-bar {
     height: 3px;
-    background: linear-gradient(90deg, var(--hy-navy) 0%, var(--hy-amber) 50%, var(--hy-amber-light) 100%);
+    background: linear-gradient(90deg, var(--hy-navy) 0%, var(--hy-teal) 50%, var(--hy-teal-light) 100%);
 }
 
 .hy-card-body {
@@ -100,9 +100,16 @@ body {
 
 .hy-step.is-active .hy-step-circle,
 .hy-step.is-done .hy-step-circle {
-    background: var(--hy-amber);
-    border-color: var(--hy-amber);
+    background: var(--hy-navy);
+    border-color: var(--hy-navy);
     color: #ffffff;
+}
+
+.hy-step.is-active .hy-step-circle {
+    background: var(--hy-teal);
+    border-color: var(--hy-teal);
+    color: var(--hy-navy);
+    box-shadow: 0 0 0 4px rgba(44, 166, 164, 0.25);
 }
 
 .hy-step.is-active .hy-step-label,
@@ -137,8 +144,8 @@ body {
 }
 
     .hy-input:focus {
-        border-color: var(--hy-amber);
-        box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.18);
+        border-color: var(--hy-teal);
+        box-shadow: 0 0 0 3px rgba(44, 166, 164, 0.18);
     }
 
 .hy-btn-primary {

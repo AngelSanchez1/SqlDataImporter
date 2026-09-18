@@ -60,7 +60,7 @@
                 !selectedSchema ||
                 !selectedTable
             ) {
-                alert(
+                AppAlert.info(
                     "Debe seleccionar una base de datos y una tabla."
                 );
 
@@ -159,7 +159,7 @@
 
                 console.error(error);
 
-                alert(
+                AppAlert.error(
                     "No fue posible generar la plantilla: "
                     + error.message
                 );

@@ -160,8 +160,7 @@
         "change",
         async function () {
 
-            const database =
-                this.value;
+            const database = this.value;
 
             limpiarTablas();
 
@@ -171,12 +170,20 @@
                     "is-done"
                 );
 
+                stepBaseDatos.classList.add(
+                    "is-active"
+                );
+
                 stepTabla.classList.remove(
                     "is-active"
                 );
 
                 return;
             }
+
+            stepBaseDatos.classList.remove(
+                "is-active"
+            );
 
             stepBaseDatos.classList.add(
                 "is-done"
@@ -318,11 +325,9 @@
         }
         catch (error) {
 
-            console.error(error);
-
             limpiarTablas();
 
-            alert(
+            AppAlert.error(
                 "No fue posible obtener las tablas: "
                 + error.message
             );
@@ -350,7 +355,8 @@
             if (!this.value) {
 
                 stepTabla.classList.remove(
-                    "is-done"
+                    "is-done",
+                    "is-active"
                 );
 
                 document.dispatchEvent(
@@ -362,10 +368,11 @@
                 return;
             }
 
-            const selectedOption =
-                this.options[
-                    this.selectedIndex
-                ];
+            const selectedOption = this.options[this.selectedIndex];
+
+            stepTabla.classList.remove(
+                "is-active"
+            );
 
             stepTabla.classList.add(
                 "is-done"
