@@ -12,6 +12,8 @@ builder.Services.AddScoped<IDatabaseMetadataService, DatabaseMetadataService>();
 builder.Services.AddScoped<ILayoutService, LayoutService>();
 builder.Services.AddScoped<ISqlImportService, SqlImportService>();
 builder.Services.AddScoped<IImportFileReaderService, ImportFileReaderService>();
+builder.Services.AddScoped<IReportQueryBuilderService, ReportQueryBuilderService>();
+builder.Services.AddScoped<IReportExecutionService, ReportExecutionService>();
 #endregion
 
 var app = builder.Build();

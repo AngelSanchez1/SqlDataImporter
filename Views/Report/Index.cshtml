@@ -1,0 +1,373 @@
+﻿@model SqlDataImporter.Models.ConnectionRequest
+
+@{
+    ViewData["Title"] = "Reportes dinámicos";
+}
+
+<link rel="stylesheet" href="~/css/SqlConnection.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/ReportBuilder.css" asp-append-version="true" />
+
+<div class="hy-wrapper">
+
+    <partial name="_SqlTargetSelector"
+             model="Model" />
+
+
+    <div id="reportBuilderSection"
+     class="hy-card mt-4 d-none"
+     data-columns-url="@Url.Action("GetColumns", "Connection")"
+     data-tables-url="@Url.Action("GetTables", "Connection")"
+     data-preview-url="@Url.Action("Preview", "Report")"
+     data-export-excel-url="@Url.Action("ExportExcel", "Report")"
+     data-export-csv-url="@Url.Action("ExportCsv", "Report")">
+
+        <div class="hy-card-header">
+
+            <div class="hy-eyebrow">
+                Constructor de reportes
+            </div>
+
+            <h4 class="hy-title">
+                Diseñar reporte
+            </h4>
+
+        </div>
+
+        <div class="hy-accent-bar"></div>
+
+
+        <div class="hy-card-body">
+
+            <!-- TABLA PRINCIPAL -->
+
+            <div class="report-section">
+
+                <div class="report-section-title">
+                    Tabla principal
+                </div>
+
+                <div class="report-target">
+
+                    <div>
+                        <div class="text-muted small">
+                            Base de datos
+                        </div>
+
+                        <div id="reportDatabase"
+                             class="fw-semibold">
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="text-muted small">
+                            Tabla
+                        </div>
+
+                        <div id="reportTable"
+                             class="fw-semibold">
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <hr class="hy-divider" />
+
+
+            <!-- COLUMNAS -->
+
+            <div class="report-section">
+
+                <div class="d-flex
+                            justify-content-between
+                            align-items-center
+                            mb-2">
+
+                    <div>
+
+                        <div class="report-section-title">
+                            Columnas del reporte
+                        </div>
+
+                        <div class="text-muted small">
+                            Seleccione las columnas que desea
+                            incluir en el resultado.
+                        </div>
+
+                    </div>
+
+
+                    <div class="report-column-actions">
+
+                        <button type="button"
+                                id="btnSelectAllColumns"
+                                class="btn btn-sm btn-outline-secondary">
+
+                            Seleccionar todas
+
+                        </button>
+
+                        <button type="button"
+                                id="btnClearColumns"
+                                class="btn btn-sm btn-outline-secondary">
+
+                            Limpiar
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <div id="reportColumnsLoading"
+                     class="text-muted small py-3 d-none">
+
+                    Cargando columnas...
+
+                </div>
+
+
+                <div id="reportColumns"
+                     class="report-columns">
+                </div>
+
+
+                <div id="reportColumnsEmpty"
+                     class="alert alert-light border mt-3 d-none">
+
+                    No se encontraron columnas para
+                    la tabla seleccionada.
+
+                </div>
+
+            </div>
+
+
+           <hr class="hy-divider" />
+
+            <!-- ==========================================
+            RELACIONES / JOINS
+            ========================================== -->
+            <div class="report-section">
+
+                <div class="d-flex
+                            justify-content-between
+                            align-items-center
+                            mb-3">
+
+                    <div>
+                        <div class="report-section-title">
+                            Relaciones
+                        </div>
+
+                        <div class="text-muted small">
+                            Agregue tablas relacionadas al reporte.
+                        </div>
+                    </div>
+
+                    <button type="button" id="btnAddJoin" class="btn btn-sm btn-outline-primary">
+                        <i class="fa fa-plus" aria-hidden="true"></i>
+                        Agregar relación
+                    </button>
+
+                </div>
+
+                <div id="reportJoins">
+                </div>
+
+                <div id="reportJoinsEmpty" class="alert alert-light border">
+                    El reporte actualmente utiliza solamente
+                    la tabla principal.
+                </div>
+
+            </div>
+
+            <hr class="hy-divider" />
+
+            <!-- ==========================================
+                 FILTROS
+                 ========================================== -->
+            <div class="report-section">
+
+                <div class="d-flex
+                            justify-content-between
+                            align-items-center
+                            mb-3">
+
+                    <div>
+                        <div class="report-section-title">
+                            Filtros
+                        </div>
+
+                        <div class="text-muted small">
+                            Defina las condiciones WHERE del reporte.
+                        </div>
+                    </div>
+
+                    <button type="button" id="btnAddFilter" class="btn btn-sm btn-outline-primary">
+                        <i class="fa fa-plus" aria-hidden="true"></i>
+                        Agregar filtro
+                    </button>
+
+                </div>
+
+
+                <div id="reportFilters">
+                </div>
+
+
+                <div id="reportFiltersEmpty"
+                     class="alert alert-light border">
+
+                    No se han agregado filtros.
+
+                </div>
+
+            </div>
+
+            <hr class="hy-divider" />
+
+            <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+
+                <div>
+                    <div class="report-section-title">
+                        Columnas combinadas
+                    </div>
+
+                    <div class="text-muted small">
+                        Combine varias columnas en un solo campo del reporte.
+                    </div>
+                </div>
+
+                <button type="button"
+                        id="btnAddConcatColumn"
+                        class="btn btn-sm btn-outline-primary">
+
+                    <i class="fa fa-plus"></i>
+                    Agregar columna combinada
+
+                </button>
+
+            </div>
+
+            <div id="reportConcatColumns">
+            </div>
+
+            <div id="reportConcatColumnsEmpty"
+                 class="alert alert-light border">
+
+                No se han agregado columnas combinadas.
+
+            </div>
+
+            <hr class="hy-divider" />
+
+            <!-- RESUMEN -->
+
+            <div class="report-selection-summary">
+
+                <div>
+
+                    <div class="text-muted small">
+                        Columnas seleccionadas
+                    </div>
+
+                    <div id="selectedColumnsCount"
+                         class="fw-bold">
+
+                        0
+
+                    </div>
+
+                </div>
+
+
+                <div id="selectedColumnsText"
+                     class="text-muted small">
+
+                    Seleccione al menos una columna.
+
+                </div>
+
+            </div>
+
+
+            <!-- ACCIONES -->
+
+            <div class="report-actions mt-4">
+
+                <button type="button"
+                        id="btnPreviewReport"
+                        class="btn btn-outline-secondary"
+                        disabled>
+
+                    Vista previa
+
+                </button>
+
+                <button type="button"
+                        id="btnExportExcel"
+                        class="btn hy-btn-primary"
+                        disabled>
+
+                    Exportar Excel
+
+                </button>
+
+                <button type="button"
+                        id="btnExportCsv"
+                        class="btn btn-outline-secondary"
+                        disabled>
+
+                    Exportar CSV
+
+                </button>
+
+            </div>
+
+            <div id="reportPreviewSection" class="report-preview-section d-none">
+                <div class="report-preview-header">
+
+                    <div>
+                        <div class="report-section-title">
+                            Vista previa
+                        </div>
+
+                        <div id="reportPreviewInfo"
+                             class="text-muted small">
+                        </div>
+                    </div>
+
+                </div>
+
+
+                <div class="table-responsive report-preview-table-wrapper">
+
+                    <table class="table report-preview-table">
+
+                        <thead id="reportPreviewHead">
+                        </thead>
+
+                        <tbody id="reportPreviewBody">
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+@section Scripts {
+    <script src="~/js/sql-target-selector.js" asp-append-version="true"></script>
+    <script src="~/js/report-builder.js" asp-append-version="true"></script>
+}
