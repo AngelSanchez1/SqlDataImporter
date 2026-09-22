@@ -1,0 +1,653 @@
+﻿/* ==========================================
+   CONTENEDOR GENERAL / STACK DE TARJETAS
+   ========================================== */
+
+.report-builder-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.report-section {
+    width: 100%;
+}
+
+.report-section-title {
+    font-weight: 700;
+    color: var(--hy-navy);
+    margin-bottom: 4px;
+}
+
+.report-target {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 14px 16px;
+    border: 1px solid #dbe3ec;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+
+/* ==========================================
+   ENCABEZADOS DE SECCIÓN
+   ========================================== */
+
+.report-section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.report-section-heading {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.report-section-icon {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #eef4fa;
+    color: var(--hy-navy);
+    flex-shrink: 0;
+    font-size: .9rem;
+}
+
+.report-section-actions {
+    display: flex;
+    gap: 8px;
+}
+
+
+/* ==========================================
+   COLUMNAS
+   ========================================== */
+
+.report-columns {
+    display: grid;
+    grid-template-columns: repeat( auto-fill, minmax(220px, 1fr) );
+    gap: 10px;
+    margin-top: 18px;
+}
+
+
+.report-column-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid #dbe3ec;
+    border-radius: 8px;
+    background: #ffffff;
+    cursor: pointer;
+    transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
+}
+
+
+    .report-column-item:hover {
+        border-color: var(--hy-amber);
+        background: #fffaf2;
+    }
+
+
+    .report-column-item.is-selected {
+        border-color: var(--hy-navy);
+        background: #f1f6fc;
+        box-shadow: 0 0 0 1px rgba(0, 59, 117, .08);
+    }
+
+
+.report-column-checkbox {
+    margin-top: 4px;
+}
+
+
+.report-column-name {
+    font-weight: 600;
+    color: #1f2937;
+    word-break: break-word;
+}
+
+
+.report-column-type {
+    font-size: .78rem;
+    color: #7b8794;
+}
+
+
+/* ==========================================
+   RESUMEN
+   ========================================== */
+
+.report-selection-summary {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+
+#selectedColumnsCount {
+    font-size: 1.25rem;
+    color: var(--hy-navy);
+}
+
+
+/* ==========================================
+   ACCIONES / BARRA STICKY
+   ========================================== */
+
+.report-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.report-actions-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 20px;
+    padding: 14px 20px;
+    background: #ffffff;
+    border: 1px solid #dbe3ec;
+    border-radius: 10px;
+    box-shadow: 0 -4px 14px rgba(0, 0, 0, .06);
+}
+
+.report-name-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eef1f5;
+}
+
+.report-name-input {
+    max-width: 320px;
+    flex: 1 1 220px;
+}
+
+.report-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+
+    .report-target {
+        grid-template-columns: 1fr;
+    }
+
+    .report-actions {
+        flex-direction: column;
+        width: 100%;
+
+        .report-actions-row {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .report-name-input {
+            max-width: none;
+        }
+    }
+
+        .report-actions .btn {
+            width: 100%;
+        }
+
+    .report-actions-bar {
+        flex-direction: column;
+        align-items: stretch;
+        position: static;
+        box-shadow: none;
+    }
+
+    .report-selection-summary {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .report-column-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        width: 100%;
+    }
+
+    .report-section-header {
+        flex-direction: column;
+    }
+}
+
+/* ==========================================
+   ACORDEÓN DE OPCIONES AVANZADAS
+   ========================================== */
+.report-advanced-accordion .accordion-item {
+    border: 1px solid #dbe3ec;
+    border-radius: 10px !important;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+    .report-advanced-accordion .accordion-item:last-child {
+        margin-bottom: 0;
+    }
+
+.report-advanced-accordion .accordion-button {
+    font-weight: 700;
+    color: var(--hy-navy);
+    background: #f8fafc;
+}
+
+    .report-advanced-accordion .accordion-button:not(.collapsed) {
+        color: var(--hy-navy);
+        background: #eef4fa;
+        box-shadow: none;
+    }
+
+    .report-advanced-accordion .accordion-button:focus {
+        box-shadow: none;
+        border-color: #dbe3ec;
+    }
+
+.report-advanced-accordion .accordion-body {
+    background: #ffffff;
+}
+
+.report-count-badge {
+    background: #dbe3ec;
+    color: var(--hy-navy);
+    font-weight: 600;
+}
+
+    .report-count-badge.has-items {
+        background: var(--hy-amber);
+        color: #1f2937;
+    }
+
+
+/* ==========================================
+   QUERY BUILDER (JOINS / FILTROS)
+   ========================================== */
+
+.report-query-item {
+    border: 1px solid #dbe3ec;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: #f8fafc;
+}
+
+.report-query-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.report-query-item-title {
+    font-weight: 700;
+    color: var(--hy-navy);
+}
+
+.report-query-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.report-query-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.report-field-label {
+    display: block;
+    font-size: .78rem;
+    color: #64748b;
+    margin-bottom: 4px;
+}
+
+.report-join-condition {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--hy-navy);
+    background: #ffffff;
+    font-family: Consolas, monospace;
+    font-size: .82rem;
+    word-break: break-word;
+}
+
+.report-remove-button {
+    white-space: nowrap;
+}
+
+.report-filter-value.d-none {
+    display: none !important;
+}
+
+@media (max-width: 768px) {
+    .report-query-grid,
+    .report-query-grid-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.report-column-group {
+    grid-column: 1 / -1;
+    margin-bottom: 18px;
+}
+
+.report-column-group-title {
+    font-weight: 700;
+    color: var(--hy-navy);
+    margin-bottom: 10px;
+}
+
+.report-column-group-grid {
+    display: grid;
+    grid-template-columns: repeat( auto-fill, minmax(220px, 1fr) );
+    gap: 10px;
+}
+
+/* ==========================================
+   VISTA PREVIA
+   ========================================== */
+
+.report-preview-card {
+    overflow: hidden;
+}
+
+.report-preview-header {
+    padding: 18px 20px;
+    background: #f4f8fb;
+    border-bottom: 1px solid #dce6ed;
+}
+
+.report-preview-table-wrapper {
+    max-height: 520px;
+}
+
+.report-preview-table {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+    .report-preview-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #2474a6;
+        color: #fff;
+        border-bottom: 3px solid #2aa7b8;
+        font-size: .82rem;
+        font-weight: 700;
+        padding: 12px 14px;
+    }
+
+    .report-preview-table tbody td {
+        padding: 10px 14px;
+        vertical-align: middle;
+        border-color: #e6edf2;
+    }
+
+    .report-preview-table tbody tr:nth-child(even) {
+        background: #f4f8fb;
+    }
+
+    .report-preview-table tbody tr:hover {
+        background: #e9f4f8;
+    }
+
+/* =========================================================
+   DISEÑADOR A TODO EL ANCHO DE LA PANTALLA
+   ========================================================= */
+.report-builder-wide {
+    width: calc(100vw - 40px);
+    max-width: none;
+    margin-left: calc(50% - 50vw + 20px);
+    margin-right: 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+
+    .report-builder-wide {
+        width: calc(100vw - 20px);
+        margin-left: calc(50% - 50vw + 10px);
+    }
+}
+
+/* =========================================================
+   MÉTRICAS
+   ========================================================= */
+.report-metric-item {
+    border-left: 4px solid #2aa7b8;
+    margin-bottom: 16px;
+}
+
+.report-metric-grid {
+    display: grid;
+    grid-template-columns: minmax(140px, .7fr) minmax(220px, 1.3fr) minmax(220px, 1.3fr) minmax(180px, 1fr);
+    gap: 14px;
+}
+
+.report-metric-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    padding: 12px 14px;
+    background: #f4f8fb;
+    border: 1px solid #dce6ed;
+    border-radius: 8px;
+}
+
+.report-section-subtitle {
+    font-size: .88rem;
+    font-weight: 700;
+    color: #173b57;
+}
+
+.report-metric-arithmetic {
+    padding: 14px;
+    border: 1px solid #dce6ed;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.report-metric-conditions {
+    padding: 14px;
+    border: 1px solid #dce6ed;
+    border-radius: 8px;
+    background: #fbfdfe;
+}
+
+.metric-condition-item {
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fff;
+    border: 1px solid #dce6ed;
+    border-radius: 8px;
+}
+
+.metric-condition-grid {
+    display: grid;
+    grid-template-columns: 110px minmax(180px, 1fr) minmax(180px, 1fr) minmax(150px, .8fr) minmax(160px, .8fr) 44px;
+    gap: 10px;
+    align-items: end;
+}
+
+.metric-condition-remove {
+    display: flex;
+    align-items: end;
+}
+
+
+@media (max-width: 1200px) {
+
+    .report-metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .metric-condition-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+
+@media (max-width: 768px) {
+
+    .report-metric-grid,
+    .metric-condition-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =========================================================
+   COLUMNAS CONDICIONALES
+   ========================================================= */
+.report-conditional-column-item {
+    border-left: 4px solid #2474a6;
+    margin-bottom: 16px;
+}
+
+.conditional-when-item {
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid #dce6ed;
+    border-radius: 10px;
+    background: #fbfdfe;
+}
+
+.conditional-when-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.conditional-condition-item {
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid #dce6ed;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.conditional-condition-grid {
+    display: grid;
+    grid-template-columns: 105px minmax(180px, 1fr) minmax(180px, 1fr) minmax(150px, .8fr) minmax(160px, .8fr) 44px;
+    gap: 10px;
+    align-items: end;
+}
+
+.conditional-condition-remove {
+    display: flex;
+    align-items: end;
+}
+
+.conditional-then-section,
+.conditional-else-section {
+    padding: 14px;
+    border: 1px solid #dce6ed;
+    border-radius: 8px;
+    background: #f4f8fb;
+}
+
+.conditional-else-section {
+    border-left: 4px solid #2aa7b8;
+}
+
+.case-result-editor {
+    width: 100%;
+}
+
+@media (max-width: 1200px) {
+    .conditional-condition-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .conditional-condition-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =========================================================
+   CHOICES.JS - DROPDOWNS DEL REPORTIADOR
+   ========================================================= */
+
+.choices {
+    position: relative;
+    margin-bottom: 0;
+}
+
+/* Cuando está abierto debe quedar por encima
+   de los demás controles */
+.choices.is-open {
+    z-index: 9999;
+}
+
+/* Lista desplegable */
+.choices__list--dropdown,
+.choices__list[aria-expanded] {
+    z-index: 10000 !important;
+}
+
+
+/* =========================================================
+   PERMITIR QUE LOS DROPDOWNS SALGAN DE SUS CONTENEDORES
+   ========================================================= */
+
+.report-query-item,
+.report-query-grid,
+.report-filter-grid,
+.report-metric-grid,
+.metric-condition-grid,
+.conditional-condition-grid,
+.accordion-body,
+.report-advanced-accordion,
+.report-advanced-accordion .accordion-item,
+.report-advanced-accordion .accordion-collapse {
+    overflow: visible !important;
+}
+
+
+/* Las tarjetas dinámicas necesitan un contexto propio */
+.report-query-item {
+    position: relative;
+}
+
+
+/* La tarjeta que tenga un Choices abierto
+   debe quedar encima de las siguientes */
+.report-query-item:has(.choices.is-open) {
+    z-index: 5000;
+}
+
+
+/* Lo mismo para bloques internos */
+.metric-condition-item:has(.choices.is-open),
+.conditional-condition-item:has(.choices.is-open) {
+    position: relative;
+    z-index: 6000;
+}
