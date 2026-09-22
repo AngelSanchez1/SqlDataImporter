@@ -591,3 +591,63 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* =========================================================
+   CHOICES.JS - DROPDOWNS DEL REPORTIADOR
+   ========================================================= */
+
+.choices {
+    position: relative;
+    margin-bottom: 0;
+}
+
+/* Cuando está abierto debe quedar por encima
+   de los demás controles */
+.choices.is-open {
+    z-index: 9999;
+}
+
+/* Lista desplegable */
+.choices__list--dropdown,
+.choices__list[aria-expanded] {
+    z-index: 10000 !important;
+}
+
+
+/* =========================================================
+   PERMITIR QUE LOS DROPDOWNS SALGAN DE SUS CONTENEDORES
+   ========================================================= */
+
+.report-query-item,
+.report-query-grid,
+.report-filter-grid,
+.report-metric-grid,
+.metric-condition-grid,
+.conditional-condition-grid,
+.accordion-body,
+.report-advanced-accordion,
+.report-advanced-accordion .accordion-item,
+.report-advanced-accordion .accordion-collapse {
+    overflow: visible !important;
+}
+
+
+/* Las tarjetas dinámicas necesitan un contexto propio */
+.report-query-item {
+    position: relative;
+}
+
+
+/* La tarjeta que tenga un Choices abierto
+   debe quedar encima de las siguientes */
+.report-query-item:has(.choices.is-open) {
+    z-index: 5000;
+}
+
+
+/* Lo mismo para bloques internos */
+.metric-condition-item:has(.choices.is-open),
+.conditional-condition-item:has(.choices.is-open) {
+    position: relative;
+    z-index: 6000;
+}

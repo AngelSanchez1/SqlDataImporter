@@ -16,22 +16,27 @@
         public List<ReportColumnReference> GroupBy { get; set; } = new();
         public List<ReportFilter> Having { get; set; } = new();
         public List<ReportParameter> Parameters { get; set; } = new();
+        public string MainSourceId { get; set; } = "main";
     }
 
     public class ReportColumn : DataBaseDto
     {
         public string? Alias { get; set; }
+        public int Order { get; set; }
     }
 
     public class ReportJoin
     {
         public string JoinType { get; set; } = "INNER";
+        public string LeftSourceId { get; set; } = "main";
         public string LeftSchema { get; set; } = string.Empty;
         public string LeftTable { get; set; } = string.Empty;
         public string LeftColumn { get; set; } = string.Empty;
+        public string RightSourceId { get; set; } = string.Empty;
         public string RightSchema { get; set; } = string.Empty;
         public string RightTable { get; set; } = string.Empty;
         public string RightColumn { get; set; } = string.Empty;
+        public string Alias { get; set; } = string.Empty;
     }
 
     public class ReportFilter : DataBaseDto
@@ -53,6 +58,7 @@
         public List<ReportColumnReference> Columns { get; set; } = new();
         public string Separator { get; set; } = " ";
         public string Alias { get; set; } = string.Empty;
+        public int Order { get; set; }
     }
 
     public class ReportColumnReference : DataBaseDto
@@ -64,6 +70,7 @@
     {
         public string Function { get; set; } = "SUM";
         public string Alias { get; set; } = string.Empty;
+        public int Order { get; set; }
         public bool Distinct { get; set; }
         public bool NullAsZero { get; set; } = true;
         public List<ReportMetricCondition> Conditions { get; set; } = new();
@@ -90,6 +97,7 @@
     public class ReportConditionalColumn
     {
         public string Alias { get; set; } = string.Empty;
+        public int Order { get; set; }
 
         public List<ReportCaseWhen> Cases { get; set; } = new();
 
@@ -108,5 +116,11 @@
         public string ResultType { get; set; } = "VALUE";
         public string? Value { get; set; }
         public string ValueType { get; set; } = "string";
+    }
+
+    public class ReportSelectExpression
+    {
+        public int Order { get; set; }
+        public string Sql { get; set; } = string.Empty;
     }
 }

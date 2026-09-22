@@ -1,47 +1,98 @@
 ﻿(() => {
-    const connectionForm =
-        document.getElementById("connectionForm");
+    const connectionForm = document.getElementById("connectionForm");
+    const btnTestConnection = document.getElementById("btnTestConnection");
+    const connectionResult = document.getElementById("connectionResult");
+    const databaseSection = document.getElementById("databaseSection");
+    const databaseSelect = document.getElementById("databaseSelect");
+    const tableSection = document.getElementById("tableSection");
+    const tableSelect = document.getElementById("tableSelect");
+    const stepConectar = document.getElementById("stepConectar");
+    const stepBaseDatos = document.getElementById("stepBaseDatos");
+    const stepTabla = document.getElementById("stepTabla");
+    const testConnectionUrl = connectionForm.dataset.testUrl;
+    const getTablesUrl = connectionForm.dataset.tablesUrl;
 
-    const btnTestConnection =
-        document.getElementById("btnTestConnection");
+    function activarSelectBuscable(select) {
 
-    const connectionResult =
-        document.getElementById("connectionResult");
+        if (!select) {
+            return;
+        }
 
-    const databaseSection =
-        document.getElementById("databaseSection");
+        if (select._choicesInstance) {
+            return;
+        }
 
-    const databaseSelect =
-        document.getElementById("databaseSelect");
+        const isDisabled = select.disabled;
 
-    const tableSection =
-        document.getElementById("tableSection");
+        select._choicesInstance =
+            new Choices(
+                select,
+                {
+                    searchEnabled: true,
+                    searchFloor: 0,
+                    shouldSort: false,
+                    itemSelectText: "",
+                    noResultsText:
+                        "No se encontraron resultados",
+                    noChoicesText:
+                        "No hay opciones disponibles",
+                    searchPlaceholderValue:
+                        "Buscar...",
+                    placeholder: true,
+                    allowHTML: false
+                }
+            );
 
-    const tableSelect =
-        document.getElementById("tableSelect");
+        if (isDisabled) {
+            select._choicesInstance.disable();
+        }
+    }
 
-    const stepConectar =
-        document.getElementById("stepConectar");
+    function destruirSelectBuscable(select) {
+        if (select && select._choicesInstance) {
+            select._choicesInstance.destroy();
+            select._choicesInstance = null;
+        }
+    }
 
-    const stepBaseDatos =
-        document.getElementById("stepBaseDatos");
+    function actualizarSelectBuscable(select, html, value = "", disabled = false) {
+        destruirSelectBuscable(select);
+        select.innerHTML = html;
 
-    const stepTabla =
-        document.getElementById("stepTabla");
+        if (value) {
+            select.value = value;
+        }
 
+        select.disabled = disabled;
 
-    // URLs generadas por Razor en la vista parcial
-    const testConnectionUrl =
-        connectionForm.dataset.testUrl;
+        activarSelectBuscable(select);
 
-    const getTablesUrl =
-        connectionForm.dataset.tablesUrl;
+        if (disabled) {
+            select._choicesInstance.disable();
+        }
+        else {
+            select._choicesInstance.enable();
+        }
+    }
 
+    function establecerSelectBuscableDisabled(select, disabled) {
+        select.disabled = disabled;
+
+        if (!select._choicesInstance) {
+            return;
+        }
+
+        if (disabled) {
+            select._choicesInstance.disable();
+        }
+        else {
+            select._choicesInstance.enable();
+        }
+    }
 
     // ==========================================
     // PROBAR CONEXIÓN
     // ==========================================
-
     connectionForm.addEventListener(
         "submit",
         async function (event) {
@@ -50,17 +101,11 @@
 
             limpiarBasesDatos();
             limpiarTablas();
-
             btnTestConnection.disabled = true;
-            btnTestConnection.innerText =
-                "Conectando...";
+            btnTestConnection.innerText = "Conectando...";
+            connectionResult.classList.add("d-none");
 
-            connectionResult.classList.add(
-                "d-none"
-            );
-
-            const formData =
-                new FormData(connectionForm);
+            const formData = new FormData(connectionForm);
 
             try {
 
@@ -74,14 +119,10 @@
                     );
 
                 if (!response.ok) {
-
-                    throw new Error(
-                        `Error HTTP ${response.status}`
-                    );
+                    throw new Error(`Error HTTP ${response.status}`);
                 }
 
-                const data =
-                    await response.json();
+                const data = await response.json();
 
                 connectionResult.classList.remove(
                     "d-none",
@@ -107,10 +148,7 @@
                         "is-active"
                     );
 
-                    cargarBasesDatos(
-                        data.databases
-                    );
-
+                    cargarBasesDatos(data.databases);
                 }
                 else {
 
@@ -119,14 +157,9 @@
                     );
                 }
 
-                connectionResult.innerText =
-                    data.message;
-
+                connectionResult.innerText = data.message;
             }
             catch (error) {
-
-                console.error(error);
-
                 connectionResult.classList.remove(
                     "d-none",
                     "hy-result-ok"
@@ -136,17 +169,11 @@
                     "hy-result-error"
                 );
 
-                connectionResult.innerText =
-                    "Ocurrió un error al intentar conectar: "
-                    + error.message;
-
+                connectionResult.innerText = "Ocurrió un error al intentar conectar: " + error.message;
             }
             finally {
-
                 btnTestConnection.disabled = false;
-
-                btnTestConnection.innerText =
-                    "Probar conexión";
+                btnTestConnection.innerText = "Probar conexión";
             }
         }
     );
@@ -155,7 +182,6 @@
     // ==========================================
     // CAMBIO DE BASE DE DATOS
     // ==========================================
-
     databaseSelect.addEventListener(
         "change",
         async function () {
@@ -203,32 +229,29 @@
     // ==========================================
     // CARGAR BASES DE DATOS
     // ==========================================
+    function cargarBasesDatos(databases) {
+        const options =
+            databases
+                .map(
+                    database => `
+                        <option value="${database}">
+                            ${database}
+                        </option>
+                    `
+                )
+                .join("");
 
-    function cargarBasesDatos(
-        databases
-    ) {
+        actualizarSelectBuscable(
+            databaseSelect,
+            `
+                <option value="">
+                    Seleccione una base de datos
+                </option>
 
-        databaseSelect.innerHTML =
-            '<option value="">Seleccione una base de datos</option>';
-
-        databases.forEach(
-            function (database) {
-
-                const option =
-                    document.createElement(
-                        "option"
-                    );
-
-                option.value =
-                    database;
-
-                option.textContent =
-                    database;
-
-                databaseSelect.appendChild(
-                    option
-                );
-            }
+                ${options}
+            `,
+            "",
+            false
         );
 
         databaseSection.classList.remove(
@@ -236,36 +259,29 @@
         );
     }
 
-
     // ==========================================
     // CARGAR TABLAS
     // ==========================================
+    async function cargarTablas(database) {
+        const formData = new FormData(connectionForm);
 
-    async function cargarTablas(
-        database
-    ) {
-
-        const formData =
-            new FormData(
-                connectionForm
-            );
-
-        formData.append(
-            "Database",
-            database
-        );
+        formData.append("Database", database);
 
         try {
+            establecerSelectBuscableDisabled(databaseSelect, true);
 
-            databaseSelect.disabled = true;
-            tableSelect.disabled = true;
-
-            tableSelect.innerHTML =
-                '<option value="">Cargando tablas...</option>';
-
-            tableSection.classList.remove(
-                "d-none"
+            actualizarSelectBuscable(
+                tableSelect,
+                `
+                    <option value="">
+                        Cargando tablas...
+                    </option>
+                `,
+                "",
+                true
             );
+
+            tableSection.classList.remove("d-none");
 
             const response =
                 await fetch(
@@ -277,77 +293,58 @@
                 );
 
             if (!response.ok) {
-
-                throw new Error(
-                    `Error HTTP ${response.status}`
-                );
+                throw new Error(`Error HTTP ${response.status}`);
             }
 
-            const data =
-                await response.json();
+            const data = await response.json();
 
             if (!data.success) {
 
-                throw new Error(
-                    data.message
-                );
+                throw new Error(data.message);
             }
 
-            tableSelect.innerHTML =
-                '<option value="">Seleccione una tabla</option>';
+            const tableOptions =
+                data.tables
+                    .map(
+                        table => `
+                            <option
+                                value="${table.fullName}"
+                                data-schema="${table.schema}"
+                                data-table="${table.name}">
 
-            data.tables.forEach(
-                function (table) {
+                                ${table.fullName}
 
-                    const option =
-                        document.createElement(
-                            "option"
-                        );
+                            </option>
+                        `
+                    )
+                    .join("");
 
-                    option.value =
-                        table.fullName;
+            actualizarSelectBuscable(
+                tableSelect,
+                `
+                    <option value="">
+                        Seleccione una tabla
+                    </option>
 
-                    option.textContent =
-                        table.fullName;
-
-                    option.dataset.schema =
-                        table.schema;
-
-                    option.dataset.table =
-                        table.name;
-
-                    tableSelect.appendChild(
-                        option
-                    );
-                }
+                    ${tableOptions}
+                `,
+                "",
+                false
             );
-
         }
         catch (error) {
-
             limpiarTablas();
 
-            AppAlert.error(
-                "No fue posible obtener las tablas: "
-                + error.message
-            );
-
+            await AppAlert.error("No fue posible obtener las tablas", error.message);
         }
         finally {
-
-            databaseSelect.disabled =
-                false;
-
-            tableSelect.disabled =
-                false;
+            establecerSelectBuscableDisabled(databaseSelect, false);
         }
     }
-
 
     // ==========================================
     // CAMBIO DE TABLA
     // ==========================================
-
     tableSelect.addEventListener(
         "change",
         function () {
@@ -383,15 +380,9 @@
                     "sqlTargetSelected",
                     {
                         detail: {
-
-                            database:
-                                databaseSelect.value,
-
-                            schema:
-                                selectedOption.dataset.schema,
-
-                            table:
-                                selectedOption.dataset.table
+                            database: databaseSelect.value,
+                            schema: selectedOption.dataset.schema,
+                            table: selectedOption.dataset.table
                         }
                     }
                 )
@@ -403,25 +394,13 @@
     // ==========================================
     // LIMPIAR BASES DE DATOS
     // ==========================================
-
     function limpiarBasesDatos() {
-
-        databaseSelect.innerHTML =
-            '<option value="">Seleccione una base de datos</option>';
-
-        databaseSection.classList.add(
-            "d-none"
-        );
-
-        stepConectar.classList.remove(
-            "is-done"
-        );
-
-        stepBaseDatos.classList.remove(
-            "is-active",
-            "is-done"
-        );
-
+        destruirSelectBuscable(databaseSelect);
+        databaseSelect.innerHTML = '<option value="">Seleccione una base de datos</option>';
+        databaseSelect.disabled = false;
+        databaseSection.classList.add("d-none");
+        stepConectar.classList.remove("is-done");
+        stepBaseDatos.classList.remove("is-active", "is-done");
         limpiarTablas();
     }
 
@@ -429,21 +408,16 @@
     // ==========================================
     // LIMPIAR TABLAS
     // ==========================================
-
     function limpiarTablas() {
-
-        tableSelect.innerHTML =
-            '<option value="">Seleccione una tabla</option>';
-
-        tableSection.classList.add(
-            "d-none"
-        );
-
-        stepTabla.classList.remove(
-            "is-active",
-            "is-done"
-        );
-
+        destruirSelectBuscable(tableSelect);
+        tableSelect.innerHTML = `
+            <option value="">
+                Seleccione una tabla
+            </option>
+        `;
+        tableSelect.disabled = false;
+        tableSection.classList.add("d-none");
+        stepTabla.classList.remove("is-active", "is-done");
         document.dispatchEvent(
             new CustomEvent(
                 "sqlTargetCleared"

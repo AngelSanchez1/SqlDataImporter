@@ -49,10 +49,92 @@
     const reportConditionalColumnsEmpty = document.getElementById("reportConditionalColumnsEmpty");
     const btnAddConditionalColumn = document.getElementById("btnAddConditionalColumn");
     const conditionalColumnsCountBadge = document.getElementById("conditionalColumnsCountBadge");
+    const MAIN_SOURCE_ID = "main";
+    let outputOrderSequence = 0;
+    let sourceSequence = 0;
+
+    function obtenerSiguienteSourceId() {
+        sourceSequence++;
+        return `src_${sourceSequence}`;
+    }
+
+    function activarSelectBuscable(select) {
+        if (!select) {
+            return;
+        }
+
+        if (select._choicesInstance) {
+            return;
+        }
+
+        const isDisabled = select.disabled;
+
+        select._choicesInstance =
+            new Choices(
+                select,
+                {
+                    searchEnabled: true,
+                    searchFloor: 0,
+                    shouldSort: false,
+                    itemSelectText: "",
+                    noResultsText: "No se encontraron resultados",
+                    noChoicesText: "No hay opciones disponibles",
+                    searchPlaceholderValue: "Buscar...",
+                    placeholder: true,
+                    allowHTML: false
+                }
+            );
+
+        if (isDisabled) {
+            select._choicesInstance.disable();
+        }
+    }
+
+    function destruirSelectBuscable(select) {
+        if (select && select._choicesInstance) {
+            select._choicesInstance.destroy();
+            select._choicesInstance = null;
+        }
+    }
+
+    function actualizarSelectBuscable(select, html, value = "", disabled = false) {
+        destruirSelectBuscable(select);
+        select.innerHTML = html;
+
+        if (value) {
+            select.value = value;
+        }
+
+        select.disabled = disabled;
+        activarSelectBuscable(select);
+
+        if (disabled) {
+            select._choicesInstance.disable();
+        }
+        else {
+            select._choicesInstance.enable();
+        }
+    }
+
+    function destruirSelectsBuscablesDentro(container) {
+        if (!container) {
+            return;
+        }
+
+        container
+            .querySelectorAll("select")
+            .forEach(
+                select => {
+                    destruirSelectBuscable(select);
+                }
+            );
+    }
 
     document.addEventListener(
         "sqlTargetSelected",
         async function (event) {
+            outputOrderSequence = 0;
+            sourceSequence = 0;
             selectedDatabase = event.detail.database;
             selectedSchema = event.detail.schema;
             selectedTable = event.detail.table;
@@ -75,6 +157,8 @@
     document.addEventListener(
         "sqlTargetCleared",
         function () {
+            outputOrderSequence = 0;
+            sourceSequence = 0;
             selectedDatabase = null;
             selectedSchema = null;
             selectedTable = null;
@@ -155,7 +239,6 @@
     }
 
     function mostrarColumnas(columns) {
-
         reportColumns.innerHTML = "";
 
         if (!columns || columns.length === 0) {
@@ -163,50 +246,108 @@
             return;
         }
 
-        mostrarGrupoColumnas(selectedSchema, selectedTable, columns, true);
+        mostrarGrupoColumnas(
+            MAIN_SOURCE_ID,
+            selectedSchema,
+            selectedTable,
+            columns,
+            true,
+            "Principal"
+        );
+
         actualizarEstadoColumnas();
     }
 
     function mostrarGrupoColumnas(
+        sourceId,
         schema,
         table,
         columns,
-        isMain = false
+        isMain = false,
+        sourceAlias = ""
     ) {
 
         const existing =
-            Array.from(
-                reportColumns.querySelectorAll(
-                    ".report-column-group"
+            Array
+                .from(
+                    reportColumns.querySelectorAll(
+                        ".report-column-group"
+                    )
                 )
-            )
-            .find(
-                group =>
-                    group.dataset.schema === schema &&
-                    group.dataset.table === table
-            );
+                .find(
+                    group =>
+                        group.dataset.sourceId ===
+                        sourceId
+                );
 
         if (existing) {
-            return;
+            const sameTable = existing.dataset.schema === schema && existing.dataset.table === table;
+
+            if (sameTable) {
+                const title = existing.querySelector(".report-column-group-title");
+
+                const displayName =
+                    isMain
+                        ? `${schema}.${table}`
+                        : sourceAlias
+                            ? `${sourceAlias} — ${schema}.${table}`
+                            : `${schema}.${table}`;
+
+                title.innerHTML = `
+                    ${displayName}
+
+                    ${
+                        isMain
+                            ? `
+                                <span class="badge bg-secondary ms-2">
+                                    Principal
+                                </span>
+                            `
+                            : `
+                                <span class="badge bg-light text-dark border ms-2">
+                                    Relacionada
+                                </span>
+                            `
+                    }
+                `;
+
+                return;
+            }
+
+            existing.remove();
         }
 
         const group = document.createElement("div");
 
         group.className = "report-column-group";
+        group.dataset.sourceId = sourceId;
         group.dataset.schema = schema;
         group.dataset.table = table;
+
+        const displayName =
+            isMain
+                ? `${schema}.${table}`
+                : sourceAlias
+                    ? `${sourceAlias} — ${schema}.${table}`
+                    : `${schema}.${table}`;
+
         group.innerHTML = `
             <div class="report-column-group-title">
 
-                ${schema}.${table}
+                ${displayName}
 
-                ${isMain
-                    ? `<span class="badge bg-secondary ms-2">
-                           Principal
-                       </span>`
-                    : `<span class="badge bg-light text-dark border ms-2">
-                           Relacionada
-                       </span>`
+                ${
+                    isMain
+                        ? `
+                            <span class="badge bg-secondary ms-2">
+                                Principal
+                            </span>
+                        `
+                        : `
+                            <span class="badge bg-light text-dark border ms-2">
+                                Relacionada
+                            </span>
+                        `
                 }
 
             </div>
@@ -215,20 +356,18 @@
             </div>
         `;
 
-
         const grid = group.querySelector(".report-column-group-grid");
 
         columns.forEach(
             column => {
-
                 const item = document.createElement("label");
-
                 item.className = "report-column-item";
                 item.innerHTML = `
                     <input
                         type="checkbox"
                         class="form-check-input report-column-checkbox"
                         value="${column.name}"
+                        data-source-id="${sourceId}"
                         data-schema="${schema}"
                         data-table="${table}"
                         data-column="${column.name}"
@@ -238,9 +377,20 @@
                         <div class="report-column-name">
                             ${column.name}
                         </div>
+
                         <div class="report-column-type">
                             ${obtenerDescripcionTipo(column)}
                         </div>
+
+                        <div class="report-column-alias-wrapper d-none mt-2">
+
+                            <input
+                                type="text"
+                                class="form-control form-control-sm report-column-alias"
+                                placeholder="Alias opcional" />
+
+                        </div>
+
                     </div>
                 `;
 
@@ -259,14 +409,29 @@
                 return;
             }
 
-            const item =
-                event.target.closest(
-                    ".report-column-item"
-                );
+            const checkbox = event.target;
+            const item =checkbox.closest(".report-column-item");
 
-            item.classList.toggle(
-                "is-selected",
-                event.target.checked
+
+            if (checkbox.checked) {
+                if (!checkbox.dataset.outputOrder) {
+                    checkbox.dataset.outputOrder = obtenerSiguienteOrdenSalida();
+                }
+            }
+            else {
+
+                delete checkbox.dataset.outputOrder;
+            }
+
+            item.classList.toggle("is-selected", event.target.checked);
+
+            item
+            .querySelector(
+                ".report-column-alias-wrapper"
+            )
+            .classList.toggle(
+                "d-none",
+                !checkbox.checked
             );
 
             actualizarEstadoColumnas();
@@ -284,10 +449,11 @@
                 .forEach(
                     checkbox => {
 
-                        checkbox.checked =
-                            true;
+                        if (!checkbox.checked) {
+                            checkbox.dataset.outputOrder = obtenerSiguienteOrdenSalida();
+                        }
 
-
+                        checkbox.checked = true;
                         checkbox.closest(
                             ".report-column-item"
                         )
@@ -312,6 +478,7 @@
                 .forEach(
                     checkbox => {
                         checkbox.checked = false;
+                        delete checkbox.dataset.outputOrder;
                         checkbox.closest(
                             ".report-column-item"
                         )
@@ -329,45 +496,78 @@
     // ESTADO
     // ==========================================
     function actualizarEstadoColumnas() {
-        const selected = obtenerColumnasSeleccionadas();
-        const concatColumns = obtenerColumnasConcatenadas();
-        const validConcatColumns = concatColumns.filter(item => item.columns.length >= 2 && item.alias.length > 0);
-        const metrics = obtenerMetricas();
-        const validMetrics =
-            metrics.filter(
-                metric =>
-                    metric.alias &&
-                    (
-                        (
-                            metric.function === "COUNT" &&
-                            !metric.column
-                        )
-                        ||
-                        metric.column
-                    )
-            );
-        const conditionalColumns = obtenerColumnasCondicionales();
-        const validConditionalColumns = conditionalColumns.filter( item => item.alias && item.cases.length > 0);
-        const totalColumns = selected.length + validConcatColumns.length + validConditionalColumns.length + validMetrics.length;
+        const outputColumns = obtenerColumnasSalidaOrdenadas();
+        selectedColumnsCount.textContent = outputColumns.length;
 
-        selectedColumnsCount.textContent = totalColumns;
-
-        if (totalColumns === 0) {
+        if (outputColumns.length === 0) {
             selectedColumnsText.textContent = "Seleccione al menos una columna.";
         }
         else {
-            const selectedTexts = [...selected];
-
-            validConcatColumns.forEach(item => { selectedTexts.push(item.alias); });
-            validConditionalColumns.forEach( item => { selectedTexts.push(item.alias); });
-            validMetrics.forEach(metric => { selectedTexts.push(metric.alias); });
-            selectedColumnsText.textContent = selectedTexts.join(", ");
+            selectedColumnsText.textContent = outputColumns.map(item => item.name).join(", ");
         }
 
-        const hasColumns = totalColumns > 0;
+        const hasColumns = outputColumns.length > 0;
         btnPreviewReport.disabled = !hasColumns;
         btnExportExcel.disabled = !hasColumns;
         btnExportCsv.disabled = !hasColumns;
+    }
+
+    function obtenerColumnasSalidaOrdenadas() {
+        const result = [];
+
+        obtenerCheckboxes()
+            .filter(checkbox => checkbox.checked)
+            .forEach(
+                checkbox => {
+                    const alias = obtenerAliasColumna(checkbox);
+                    result.push({
+                        order: Number(checkbox.dataset.outputOrder) || 0,
+                        name: alias || checkbox.dataset.column
+                    });
+                }
+            );
+
+        obtenerColumnasConcatenadas()
+            .filter(item => item.columns.length >= 2 && item.alias)
+            .forEach(
+                item => {
+                    result.push({
+                        order: item.order,
+                        name: item.alias
+                    });
+                }
+            );
+
+        obtenerColumnasCondicionales()
+            .filter(item => item.alias && item.cases.length > 0)
+            .forEach(
+                item => {
+                    result.push({
+                        order: item.order,
+                        name: item.alias
+                    });
+                }
+            );
+
+        obtenerMetricas()
+            .filter(metric => metric.alias && (metric.column || metric.function === "COUNT"))
+            .forEach(
+                metric => {
+                    result.push({
+                        order: metric.order,
+                        name: metric.alias
+                    });
+                }
+            );
+
+        return result
+            .sort(
+                (a, b) => {
+                    const orderA = a.order <= 0 ? Number.MAX_SAFE_INTEGER : a.order;
+                    const orderB = b.order <= 0 ? Number.MAX_SAFE_INTEGER : b.order;
+                    return orderA - orderB;
+                }
+            );
     }
 
     // ==========================================
@@ -519,16 +719,7 @@
     );
 
     function obtenerOpcionesTablas() {
-
-        const usedTables = new Set(obtenerTablasEnConsulta().map(item => item.fullName.toLowerCase()));
-
         return databaseTables
-            .filter(
-                table => {
-                    const fullName = `${table.schema}.${table.name}`.toLowerCase();
-                    return !usedTables.has(fullName);
-                }
-            )
             .map(
                 table => `
                     <option
@@ -540,37 +731,6 @@
                 `
             )
             .join("");
-    }
-
-    function refrescarTablasFiltros() {
-
-        const availableTables = obtenerOpcionesTablasConsulta();
-        const filters = reportFilters.querySelectorAll(".report-filter-item");
-
-        filters.forEach(
-            filter => {
-
-                const select = filter.querySelector(".filter-table");
-                const currentValue = select.value;
-
-                select.innerHTML = `
-                    <option value="">
-                        Seleccione tabla
-                    </option>
-                    ${availableTables}
-                `;
-
-                const optionStillExists =
-                    Array.from(select.options)
-                    .some(
-                        option => option.value === currentValue
-                    );
-
-                if (optionStillExists) {
-                    select.value = currentValue;
-                }
-            }
-        );
     }
 
     function obtenerOpcionesColumnasPrincipales() {
@@ -596,8 +756,8 @@
         reportJoinsEmpty.classList.add("d-none");
 
         const join = document.createElement("div");
-
         join.className = "report-query-item report-join-item";
+        join.dataset.sourceId = obtenerSiguienteSourceId();
         reportJoins.appendChild(join);
 
         const availableLeftTables = obtenerTablasEnConsulta(join);
@@ -643,7 +803,6 @@
 
                 </div>
 
-
                 <div>
 
                     <label class="report-field-label">
@@ -658,14 +817,13 @@
 
                         ${availableLeftTables
                             .map(
-                                table => `
+                                source => `
                                     <option
-                                        value="${table.fullName}"
-                                        data-schema="${table.schema}"
-                                        data-table="${table.table}">
-
-                                        ${table.fullName}
-
+                                        value="${source.sourceId}"
+                                        data-source-id="${source.sourceId}"
+                                        data-schema="${source.schema}"
+                                        data-table="${source.table}">
+                                        ${source.label}
                                     </option>
                                 `
                             )
@@ -686,8 +844,7 @@
                         Columna origen
                     </label>
 
-                    <select class="form-select join-left-column"
-                            disabled>
+                    <select class="form-select join-left-column" disabled>
 
                         <option value="">
                             Seleccione primero una tabla
@@ -696,7 +853,6 @@
                     </select>
 
                 </div>
-
 
                 <div>
 
@@ -716,8 +872,25 @@
 
                 </div>
 
-            </div>
+                <div class="mt-3">
 
+                    <label class="report-field-label">
+                        Nombre de la relación
+                    </label>
+
+                    <input
+                        type="text"
+                        class="form-control join-source-alias"
+                        placeholder="Ej. Usuario Alta" />
+
+                    <div class="form-text">
+                        Permite identificar esta instancia de la tabla
+                        en filtros, métricas y columnas calculadas.
+                    </div>
+
+                </div>
+
+            </div>
 
             <div class="mt-3">
 
@@ -725,8 +898,7 @@
                     Columna relacionada
                 </label>
 
-                <select class="form-select join-right-column"
-                        disabled>
+                <select class="form-select join-right-column" disabled>
 
                     <option value="">
                         Seleccione primero una tabla
@@ -736,13 +908,14 @@
 
             </div>
 
-
             <div class="report-join-condition mt-3">
                 Configure la relación.
             </div>
         `;
 
         actualizarBadge(joinsCountBadge, reportJoins.children.length);
+        activarSelectBuscable(join.querySelector(".join-left-table"));
+        activarSelectBuscable(join.querySelector(".join-table"));
     }
 
     reportJoins.addEventListener(
@@ -765,11 +938,16 @@
                 const table = option.dataset.table;
                 const rightColumn = join.querySelector(".join-right-column");
 
-                rightColumn.innerHTML = `
-                    <option value="">
-                        Cargando...
-                    </option>
-                `;
+                actualizarSelectBuscable(
+                    rightColumn,
+                    `
+                        <option value="">
+                            Cargando...
+                        </option>
+                    `,
+                    "",
+                    true
+                );
 
                 rightColumn.disabled = true;
 
@@ -782,31 +960,36 @@
 
                     const columns = await obtenerColumnasTabla(schema, table);
 
-                    rightColumn.innerHTML = `
-                        <option value="">
-                            Seleccione columna
-                        </option>
+                    actualizarSelectBuscable(
+                        rightColumn,
+                        `
+                            <option value="">
+                                Seleccione columna
+                            </option>
 
-                        ${columns
-                            .map(
-                                column => `
-                                    <option
-                                        value="${column.name}">
-                                        ${column.name}
-                                        (${column.dataType})
-                                    </option>
-                                `
-                            )
-                            .join("")}
-                    `;
+                            ${columns
+                                .map(
+                                    column => `
+                                        <option
+                                            value="${column.name}">
+                                            ${column.name}
+                                            (${column.dataType})
+                                        </option>
+                                    `
+                                )
+                                .join("")}
+                        `,
+                        "",
+                        false
+                    );
 
+                    const sourceAlias = join.querySelector(".join-source-alias")?.value?.trim();
 
-                    rightColumn.disabled = false;
-
-                    mostrarGrupoColumnas(schema, table, columns, false);
+                    mostrarGrupoColumnas(join.dataset.sourceId, schema, table, columns, false, sourceAlias);
                     actualizarEstadoColumnas();
                     actualizarDescripcionJoin(join);
-                    refrescarTablasFiltros();
+                    refrescarFuentesOrigenJoins();
+                    refrescarFuentesConsulta();
                 }
                 catch (error) {
                     await AppAlert.error("No fue posible obtener las columnas", error.message);
@@ -820,43 +1003,58 @@
                 const table = option?.dataset.table;
                 const columnSelect = join.querySelector(".join-left-column");
 
-                columnSelect.innerHTML = `
-                    <option value="">
-                        Cargando...
-                    </option>
-                `;
-
-                columnSelect.disabled = true;
+                actualizarSelectBuscable(
+                    columnSelect,
+                    `
+                        <option value="">
+                            Cargando...
+                        </option>
+                    `,
+                    "",
+                    true
+                );
 
                 if (!schema || !table) {
+                    actualizarSelectBuscable(
+                        columnSelect,
+                        `
+                            <option value="">
+                                Seleccione primero una tabla
+                            </option>
+                        `,
+                        "",
+                        true
+                    );
                     return;
                 }
 
                 try {
                     const columns = await obtenerColumnasTabla(schema,table);
 
-                    columnSelect.innerHTML = `
-                        <option value="">
-                            Seleccione columna
-                        </option>
+                    actualizarSelectBuscable(
+                        columnSelect,
+                        `
+                            <option value="">
+                                Seleccione columna
+                            </option>
 
-                        ${columns
-                            .map(
-                                column => `
-                                    <option
-                                        value="${column.name}">
+                            ${columns
+                                .map(
+                                    column => `
+                                        <option
+                                            value="${column.name}">
 
-                                        ${column.name}
-                                        (${column.dataType})
+                                            ${column.name}
+                                            (${column.dataType})
 
-                                    </option>
-                                `
-                            )
-                            .join("")}
-                    `;
-
-
-                    columnSelect.disabled = false;
+                                        </option>
+                                    `
+                                )
+                                .join("")}
+                        `,
+                        "",
+                        false
+                    );
                     actualizarDescripcionJoin(join);
                 }
                 catch (error) {
@@ -881,11 +1079,53 @@
                 return;
             }
 
-            event.target
-                .closest(
+            const join =
+                event.target.closest(
                     ".report-join-item"
-                )
-                .remove();
+                );
+
+            const sourceId = join.dataset.sourceId;
+            const dependentJoin =
+                Array
+                    .from(
+                        reportJoins.querySelectorAll(
+                            ".report-join-item"
+                        )
+                    )
+                    .find(
+                        item =>
+                            item !== join &&
+                            item.querySelector(
+                                ".join-left-table"
+                            )?.value === sourceId
+                    );
+
+            if (dependentJoin) {
+
+                AppAlert.warning(
+                    "Relación en uso",
+                    "Esta relación está siendo utilizada como origen de otra relación. Quite primero las relaciones que dependen de ella."
+                );
+
+                return;
+            }
+
+            destruirSelectsBuscablesDentro(join);
+
+            join.remove();
+
+            const columnGroup =
+                reportColumns.querySelector(
+                    `.report-column-group[data-source-id="${sourceId}"]`
+                );
+
+            if (columnGroup) {
+                columnGroup.remove();
+            }
+
+            actualizarEstadoColumnas();
+            refrescarFuentesOrigenJoins();
+            refrescarFuentesConsulta();
 
             if (reportJoins.children.length === 0) {
                 reportJoinsEmpty.classList.remove("d-none");
@@ -1026,18 +1266,21 @@
         reportFilters.appendChild(filter);
         actualizarConectoresFiltros();
         actualizarBadge(filtersCountBadge, reportFilters.children.length);
+        activarSelectBuscable(filter.querySelector(".filter-table")
+);
     }
 
     function obtenerOpcionesTablasConsulta() {
 
         return obtenerTablasEnConsulta()
             .map(
-                table => `
+                source => `
                     <option
-                        value="${table.fullName}"
-                        data-schema="${table.schema}"
-                        data-table="${table.table}">
-                        ${table.fullName}
+                        value="${source.sourceId}"
+                        data-source-id="${source.sourceId}"
+                        data-schema="${source.schema}"
+                        data-table="${source.table}">
+                        ${source.label}
                     </option>
                 `
             )
@@ -1067,7 +1310,6 @@
     function obtenerOperadores(sqlType) {
         sqlType = sqlType.toLowerCase();
 
-
         if (
             [
                 "int",
@@ -1082,7 +1324,6 @@
                 "real"
             ].includes(sqlType)
         ) {
-
             return [
                 ["=", "Igual"],
                 ["<>", "Diferente"],
@@ -1095,7 +1336,6 @@
             ];
         }
 
-
         if (
             [
                 "date",
@@ -1104,13 +1344,12 @@
                 "smalldatetime"
             ].includes(sqlType)
         ) {
-
             return [
                 ["=", "Igual"],
                 [">", "Después de"],
-                [">=", "Desde"],
+                [">=", "Mayor igual que"],
                 ["<", "Antes de"],
-                ["<=", "Hasta"]
+                ["<=", "Menor igual que"]
             ];
         }
 
@@ -1119,7 +1358,6 @@
                 ["=", "Igual"]
             ];
         }
-
 
         return [
             ["=", "Igual"],
@@ -1150,31 +1388,14 @@
                 const option = event.target.selectedOptions[0];
                 const schema = option?.dataset.schema;
                 const table = option?.dataset.table;
-
-                const columnSelect =
-                    filter.querySelector(
-                        ".filter-column"
-                    );
-
-                const operatorSelect =
-                    filter.querySelector(
-                        ".filter-operator"
-                    );
-
-                const input =
-                    filter.querySelector(
-                        ".filter-value"
-                    );
+                const columnSelect = filter.querySelector(".filter-column");
+                const operatorSelect = filter.querySelector(".filter-operator");
+                const input = filter.querySelector(".filter-value");
+                const sourceId = option?.dataset.sourceId;
 
                 columnSelect.disabled = true;
                 operatorSelect.disabled = true;
                 input.disabled = true;
-
-                columnSelect.innerHTML = `
-                    <option value="">
-                        Cargando...
-                    </option>
-                `;
 
                 operatorSelect.innerHTML = `
                     <option value="">
@@ -1184,7 +1405,28 @@
 
                 input.value = "";
 
+                actualizarSelectBuscable(
+                    columnSelect,
+                    `
+                        <option value="">
+                            Cargando...
+                        </option>
+                    `,
+                    "",
+                    true
+                );
+
                 if (!schema || !table) {
+                    actualizarSelectBuscable(
+                        columnSelect,
+                        `
+                            <option value="">
+                                Seleccione primero una tabla
+                            </option>
+                        `,
+                        "",
+                        true
+                    );
                     return;
                 }
 
@@ -1192,32 +1434,35 @@
 
                     const columns = await obtenerColumnasTabla(schema,table);
 
-                    columnSelect.innerHTML = `
-                        <option value="">
-                            Seleccione columna
-                        </option>
+                    actualizarSelectBuscable(
+                        columnSelect,
+                        `
+                            <option value="">
+                                Seleccione columna
+                            </option>
 
-                        ${columns
-                            .map(
-                                column => `
-                                    <option
-                                        value="${column.name}"
+                            ${columns
+                                .map(
+                                    column => `
+                                        <option
+                                            value="${column.name}"
+                                            data-source-id="${sourceId}"
+                                            data-schema="${schema}"
+                                            data-table="${table}"
+                                            data-column="${column.name}"
+                                            data-type="${column.dataType}">
 
-                                        data-schema="${schema}"
-                                        data-table="${table}"
-                                        data-column="${column.name}"
-                                        data-type="${column.dataType}">
+                                            ${column.name}
+                                            (${column.dataType})
 
-                                        ${column.name}
-                                        (${column.dataType})
-
-                                    </option>
-                                `
-                            )
-                            .join("")}
-                    `;
-
-                    columnSelect.disabled = false;
+                                        </option>
+                                    `
+                                )
+                                .join("")}
+                        `,
+                        "",
+                        false
+                    );
                 }
                 catch (error) {
                     await AppAlert.error("No fue posible cargar las columnas",error.message);
@@ -1362,12 +1607,14 @@
     );
 
     function limpiarJoins() {
+        destruirSelectsBuscablesDentro(reportJoins);
         reportJoins.innerHTML = "";
         reportJoinsEmpty.classList.remove("d-none");
         actualizarBadge(joinsCountBadge, 0);
     }
 
     function limpiarFiltros() {
+        destruirSelectsBuscablesDentro(reportFilters);
         reportFilters.innerHTML = "";
         reportFiltersEmpty.classList.remove("d-none");
         actualizarBadge(filtersCountBadge, 0);
@@ -1561,6 +1808,7 @@
             user: connectionData.get("User"),
             password: connectionData.get("Password"),
             database: selectedDatabase,
+            mainSourceId: MAIN_SOURCE_ID,
             mainSchema: selectedSchema,
             mainTable: selectedTable,
             columns: obtenerColumnasReporte(),
@@ -1585,32 +1833,86 @@
             )
             .map(
             checkbox => ({
+                sourceId: checkbox.dataset.sourceId,
                 schema: checkbox.dataset.schema,
                 table: checkbox.dataset.table,
                 column: checkbox.dataset.column,
-                alias: null
+                alias: obtenerAliasColumna(checkbox),
+                order: Number(checkbox.dataset.outputOrder) || 0
             })
         );
     }
 
     function obtenerJoins() {
-
         return Array
-            .from(reportJoins.querySelectorAll(".report-join-item"))
+            .from(
+                reportJoins.querySelectorAll(
+                    ".report-join-item"
+                )
+            )
             .map(
                 join => {
 
-                    const leftTable = join.querySelector(".join-left-table").selectedOptions[0];
-                    const rightTable = join.querySelector(".join-table").selectedOptions[0];
+                    const leftSource =
+                        join.querySelector(
+                            ".join-left-table"
+                        )
+                        .selectedOptions[0];
+
+
+                    const rightTable =
+                        join.querySelector(
+                            ".join-table"
+                        )
+                        .selectedOptions[0];
+
 
                     return {
-                        joinType: join.querySelector(".join-type").value,
-                        leftSchema: leftTable?.dataset.schema ?? "",
-                        leftTable: leftTable?.dataset.table ?? "",
-                        leftColumn: join.querySelector(".join-left-column").value,
-                        rightSchema: rightTable?.dataset.schema ?? "",
-                        rightTable: rightTable?.dataset.table ?? "",
-                        rightColumn: join.querySelector(".join-right-column").value
+                        joinType:
+                            join.querySelector(
+                                ".join-type"
+                            ).value,
+
+                        leftSourceId:
+                            leftSource?.dataset.sourceId ??
+                            "",
+
+                        leftSchema:
+                            leftSource?.dataset.schema ??
+                            "",
+
+                        leftTable:
+                            leftSource?.dataset.table ??
+                            "",
+
+                        leftColumn:
+                            join.querySelector(
+                                ".join-left-column"
+                            ).value,
+
+                        rightSourceId:
+                            join.dataset.sourceId,
+
+                        rightSchema:
+                            rightTable?.dataset.schema ??
+                            "",
+
+                        rightTable:
+                            rightTable?.dataset.table ??
+                            "",
+
+                        rightColumn:
+                            join.querySelector(
+                                ".join-right-column"
+                            ).value,
+
+                        alias:
+                            join.querySelector(
+                                ".join-source-alias"
+                            )
+                            ?.value
+                            ?.trim() ??
+                            ""
                     };
                 }
             );
@@ -1633,6 +1935,7 @@
 
                     return {
                         logicalOperator: filter.querySelector(".filter-logical").value,
+                        sourceId: column?.dataset.sourceId ??"",
                         schema: column?.dataset.schema ?? "",
                         table: column?.dataset.table ?? "",
                         column: column?.dataset.column ?? "",
@@ -1643,8 +1946,12 @@
                             isMultiple
                                 ? value
                                     .split(",")
-                                    .map(x => x.trim())
-                                    .filter(x => x.length > 0)
+                                    .map(
+                                        x => x.trim().replace(/^['"]|['"]$/g, "")
+                                    )
+                                    .filter(
+                                        x => x.length > 0
+                                    )
                                 : []
                     };
                 }
@@ -1668,34 +1975,59 @@
             return;
         }
 
+        const sourceAlias =join.querySelector(".join-source-alias")?.value?.trim();
         description.textContent =
             `${joinType} JOIN `
-            + `${rightSchema}.${rightTable} `
-            + `ON `
-            + `${leftSchema}.${leftTable}.${leftColumn} `
-            + `= `
-            + `${rightSchema}.${rightTable}.${rightColumn}`;
+            +
+            `${rightSchema}.${rightTable}`
+            +
+            (
+                sourceAlias
+                    ? ` (${sourceAlias})`
+                    : ""
+            )
+            +
+            ` ON `
+            +
+            `${leftSchema}.${leftTable}.${leftColumn} `
+            +
+            `= `
+            +
+            `${rightSchema}.${rightTable}.${rightColumn}`;
     }
 
     function obtenerTablasEnConsulta(hastaJoin = null) {
-
-        const tables = [
+        const sources = [
             {
+                sourceId: MAIN_SOURCE_ID,
                 schema: selectedSchema,
                 table: selectedTable,
-                fullName: `${selectedSchema}.${selectedTable}`
+                fullName: `${selectedSchema}.${selectedTable}`,
+                alias: "Principal",
+                label: `${selectedSchema}.${selectedTable} (Principal)`
             }
         ];
 
-        const joins = Array.from(reportJoins.querySelectorAll(".report-join-item"));
+        const joins =
+            Array.from(
+                reportJoins.querySelectorAll(
+                    ".report-join-item"
+                )
+            );
 
-        for (const join of joins) {
+        for (let index = 0; index < joins.length; index++) {
+            const join = joins[index];
 
             if (hastaJoin && join === hastaJoin) {
                 break;
             }
 
-            const option = join.querySelector(".join-table")?.selectedOptions[0];
+            const option =
+                join.querySelector(
+                    ".join-table"
+                )
+                ?.selectedOptions[0];
+
             const schema = option?.dataset.schema;
             const table = option?.dataset.table;
 
@@ -1703,25 +2035,21 @@
                 continue;
             }
 
-            const exists =
-                tables.some(
-                    item =>
-                        item.schema === schema &&
-                        item.table === table
-                );
+            const sourceId = join.dataset.sourceId;
+            const sourceAlias = join.querySelector(".join-source-alias")?.value?.trim();
+            const label = sourceAlias ? `${sourceAlias} — ${schema}.${table}` : `${schema}.${table} (Relación ${index + 1})`;
 
-
-            if (!exists) {
-
-                tables.push({
-                    schema,
-                    table,
-                    fullName: `${schema}.${table}`
-                });
-            }
+            sources.push({
+                sourceId:sourceId,
+                schema: schema,
+                table: table,
+                fullName: `${schema}.${table}`,
+                alias: sourceAlias,
+                label: label
+            });
         }
 
-        return tables;
+        return sources;
     }
 
     function actualizarConectoresFiltros() {
@@ -1750,249 +2078,57 @@
         }
     );
 
-    function obtenerColumnasDisponiblesReporte() {
-
-        return obtenerCheckboxes()
-            .map(
-                checkbox => ({
-                    schema: checkbox.dataset.schema,
-                    table: checkbox.dataset.table,
-                    column: checkbox.dataset.column,
-                    type: checkbox.dataset.type
-                })
-            );
-    }
-
     function esTipoConcatenable(type) {
         return [
+            // Texto
             "varchar",
             "nvarchar",
             "char",
             "nchar",
             "text",
-            "ntext"
+            "ntext",
+
+            // Enteros
+            "tinyint",
+            "smallint",
+            "int",
+            "bigint",
+
+            // Decimales
+            "decimal",
+            "numeric",
+            "money",
+            "smallmoney",
+            "float",
+            "real",
+
+            // Booleano
+            "bit",
+
+            // Fechas
+            "date",
+            "datetime",
+            "datetime2",
+            "smalldatetime",
+            "time",
+
+            // Identificadores
+            "uniqueidentifier"
         ].includes(
             type.toLowerCase()
         );
     }
 
-    function agregarColumnaConcatenada() {
-
-        const availableColumns =
-            obtenerColumnasDisponiblesReporte()
-                .filter(
-                    column => esTipoConcatenable(column.type)
-                );
-
-
-        if (availableColumns.length < 2) {
-
-            AppAlert.warning(
-                "Columnas insuficientes",
-                "Debe haber al menos dos columnas de texto disponibles para realizar una concatenación."
-            );
-
-            return;
-        }
-
-        reportConcatColumnsEmpty.classList.add("d-none");
-
-        const item = document.createElement("div");
-
-        item.className = "report-query-item report-concat-item";
-        item.innerHTML = `
-            <div class="report-query-item-header">
-
-                <div class="report-query-item-title">
-                    Columna combinada
-                </div>
-
-                <button type="button"
-                        class="btn btn-sm btn-outline-danger btn-remove-concat">
-
-                    Quitar
-
-                </button>
-
-            </div>
-
-
-            <div class="mb-3">
-
-                <label class="report-field-label">
-                    Columnas
-                </label>
-
-                <div class="report-concat-columns">
-
-                    ${availableColumns
-                        .map(
-                            column => `
-                                <label class="form-check mb-2">
-
-                                    <input
-                                        type="checkbox"
-                                        class="form-check-input concat-column"
-                                        data-schema="${column.schema}"
-                                        data-table="${column.table}"
-                                        data-column="${column.column}"
-                                        data-type="${column.type}">
-
-                                    <span class="form-check-label">
-                                        ${column.schema}.${column.table}.${column.column}
-                                    </span>
-
-                                </label>
-                            `
-                        )
-                        .join("")}
-
-                </div>
-
-            </div>
-
-
-            <div class="report-query-grid">
-
-                <div>
-
-                    <label class="report-field-label">
-                        Separador
-                    </label>
-
-                    <select class="form-select concat-separator">
-
-                        <option value=" ">
-                            Espacio
-                        </option>
-
-                        <option value=", ">
-                            Coma + espacio
-                        </option>
-
-                        <option value=" - ">
-                            Guion
-                        </option>
-
-                        <option value="">
-                            Sin separador
-                        </option>
-
-                    </select>
-
-                </div>
-
-
-                <div>
-
-                    <label class="report-field-label">
-                        Alias
-                    </label>
-
-                    <input type="text"
-                           class="form-control concat-alias"
-                           placeholder="Ej. NombreCompleto" />
-
-                </div>
-
-            </div>
-        `;
-
-        reportConcatColumns.appendChild(item);
-        actualizarEstadoColumnas();
-        actualizarBadge(concatCountBadge, reportConcatColumns.children.length);
-    }
-
-    reportConcatColumns.addEventListener(
-        "change",
-        actualizarEstadoColumnas()
-    );
-
     reportConcatColumns.addEventListener(
         "input",
-        actualizarEstadoColumnas()
+        actualizarEstadoColumnas
     );
-
-    reportConcatColumns.addEventListener(
-        "click",
-        function (event) {
-
-            const button = event.target.closest(".btn-remove-concat");
-
-            if (!button) {
-                return;
-            }
-
-            const item = button.closest(".report-concat-item");
-
-            if (!item) {
-                return;
-            }
-
-            item.remove();
-
-            if (reportConcatColumns.children.length === 0) {
-                reportConcatColumnsEmpty.classList.remove("d-none");
-            }
-
-            actualizarEstadoColumnas();
-            actualizarBadge(concatCountBadge, reportConcatColumns.children.length);
-        }
-    );
-
-
-    function obtenerColumnasConcatenadas() {
-        return Array
-            .from(
-                reportConcatColumns.querySelectorAll(
-                    ".report-concat-item"
-                )
-            )
-            .map(
-                item => {
-
-                    const columns =
-                        Array
-                            .from(
-                                item.querySelectorAll(
-                                    ".concat-column:checked"
-                                )
-                            )
-                            .map(
-                                checkbox => ({
-                                    schema:
-                                        checkbox.dataset.schema,
-
-                                    table:
-                                        checkbox.dataset.table,
-
-                                    column:
-                                        checkbox.dataset.column
-                                })
-                            );
-
-
-                    return {
-                        columns: columns,
-
-                        separator:
-                            item.querySelector(
-                                ".concat-separator"
-                            ).value,
-
-                        alias:
-                            item.querySelector(
-                                ".concat-alias"
-                            ).value.trim()
-                    };
-                }
-            );
-    }
 
     function limpiarColumnasConcatenadas() {
-        reportConcatColumns.innerHTML = "";
+        destruirSelectsBuscablesDentro(reportConcatColumns);
+        reportConcatColumns.innerHTML ="";
         reportConcatColumnsEmpty.classList.remove("d-none");
-        actualizarBadge(concatCountBadge, 0);
+        actualizarBadge(concatCountBadge,0);
     }
 
     function validarConfiguracionReporte(request) {
@@ -2012,10 +2148,19 @@
         for (let i = 0; i < request.joins.length; i++) {
             const join = request.joins[i];
 
-            if (!join.leftSchema || !join.leftTable || !join.leftColumn || !join.rightSchema || !join.rightTable || !join.rightColumn) {
+            if (
+                !join.leftSourceId ||
+                !join.leftSchema ||
+                !join.leftTable ||
+                !join.leftColumn ||
+                !join.rightSourceId ||
+                !join.rightSchema ||
+                !join.rightTable ||
+                !join.rightColumn
+            ) {
                 return {
                     valid: false,
-                    message: `La relación ${i + 1} está incompleta. ` + "Seleccione ambas tablas y ambas columnas."
+                    message: `La relación ${i + 1} está incompleta. ` + "Seleccione ambas fuentes, tablas y columnas."
                 };
             }
         }
@@ -2036,12 +2181,37 @@
                     message: `La columna combinada ${i + 1} necesita un alias.`
                 };
             }
+
+            for (let j = 0; j < concat.columns.length; j++) {
+
+                const column = concat.columns[j];
+
+                if (
+                    !column.sourceId ||
+                    !column.schema ||
+                    !column.table ||
+                    !column.column
+                ) {
+                    return {
+                        valid: false,
+                        message:
+                            `La columna ${j + 1} de la columna combinada ` +
+                            `${i + 1} está incompleta.`
+                    };
+                }
+            }
         }
 
         for (let i = 0; i < request.filters.length; i++) {
             const filter = request.filters[i];
 
-            if (!filter.schema || !filter.table || !filter.column || !filter.operator) {
+            if (
+                !filter.sourceId ||
+                !filter.schema ||
+                !filter.table ||
+                !filter.column ||
+                !filter.operator
+            ) {
                 return {
                     valid: false,
                     message: `El filtro ${i + 1} está incompleto.`
@@ -2097,6 +2267,7 @@
                     const condition = caseWhen.conditions[k];
 
                     if (
+                        !condition.sourceId ||
                         !condition.schema ||
                         !condition.table ||
                         !condition.column ||
@@ -2138,6 +2309,105 @@
 
             if (!elseValidation.valid) {
                 return elseValidation;
+            }
+        }
+
+        for (let i = 0; i < request.metrics.length;i++) {
+            const metric = request.metrics[i];
+
+            if (!metric.alias) {
+                return {
+                    valid: false,
+                    message: `La métrica ${i + 1} necesita un alias.`
+                };
+            }
+
+            const countAll =
+                metric.function === "COUNT" &&
+                !metric.column;
+
+            if (
+                !countAll &&
+                (
+                    !metric.sourceId ||
+                    !metric.schema ||
+                    !metric.table ||
+                    !metric.column
+                )
+            ) {
+                return {
+                    valid: false,
+                    message:
+                        `La métrica ${i + 1} no tiene una columna válida.`
+                };
+            }
+
+            for (let j = 0; j < metric.conditions.length; j++) {
+
+                const condition =
+                    metric.conditions[j];
+
+
+                if (
+                    !condition.sourceId ||
+                    !condition.schema ||
+                    !condition.table ||
+                    !condition.column ||
+                    !condition.operator
+                ) {
+                    return {
+                        valid: false,
+                        message:
+                            `La condición ${j + 1} de la métrica ` +
+                            `'${metric.alias}' está incompleta.`
+                    };
+                }
+
+
+                const noValue =
+                    condition.operator === "IS_NULL" ||
+                    condition.operator === "IS_NOT_NULL";
+
+
+                const multiple =
+                    condition.operator === "IN" ||
+                    condition.operator === "NOT_IN";
+
+
+                if (
+                    multiple &&
+                    (
+                        !condition.values ||
+                        condition.values.length === 0
+                    )
+                ) {
+                    return {
+                        valid: false,
+                        message:
+                            `La condición ${j + 1} de la métrica ` +
+                            `'${metric.alias}' requiere valores.`
+                    };
+                }
+
+
+                if (
+                    !noValue &&
+                    !multiple &&
+                    (
+                        condition.value === null ||
+                        condition.value === undefined ||
+                        String(
+                            condition.value
+                        ).trim() === ""
+                    )
+                ) {
+                    return {
+                        valid: false,
+                        message:
+                            `La condición ${j + 1} de la métrica ` +
+                            `'${metric.alias}' requiere un valor.`
+                    };
+                }
             }
         }
 
@@ -2183,6 +2453,7 @@
 
         const metric = document.createElement("div");
         metric.className = "report-query-item report-metric-item";
+        metric.dataset.outputOrder = obtenerSiguienteOrdenSalida();
         metric.innerHTML = `
             <div class="report-query-item-header">
 
@@ -2451,7 +2722,11 @@
         `;
 
         reportMetrics.appendChild(metric);
-
+        activarSelectBuscable(
+            metric.querySelector(
+                ".metric-table"
+            )
+        );
         actualizarBadge(metricsCountBadge, reportMetrics.children.length);
         actualizarEstadoMetrica(metric);
         actualizarEstadoColumnas();
@@ -2467,32 +2742,43 @@
         const columnSelect = metric.querySelector(".metric-column");
 
         if (countAll && functionName === "COUNT") {
-            columnSelect.innerHTML = `
-                <option value="">
-                    Todos los registros (*)
-                </option>
-            `;
-            columnSelect.disabled = true;
+             actualizarSelectBuscable(
+                columnSelect,
+                `
+                    <option value="">
+                        Todos los registros (*)
+                    </option>
+                `,
+                "",
+                true
+            );
             return;
         }
 
         if (!schema || !table) {
-            columnSelect.innerHTML = `
-                <option value="">
-                    Seleccione primero una tabla
-                </option>
-            `;
-            columnSelect.disabled = true;
+            actualizarSelectBuscable(
+                columnSelect,
+                `
+                    <option value="">
+                        Seleccione primero una tabla
+                    </option>
+                `,
+                "",
+                true
+            );
             return;
         }
 
-        columnSelect.innerHTML = `
-            <option value="">
-                Cargando...
-            </option>
-        `;
-
-        columnSelect.disabled = true;
+        actualizarSelectBuscable(
+            columnSelect,
+            `
+                <option value="">
+                    Cargando...
+                </option>
+            `,
+            "",
+            true
+        );
 
         try {
             const columns = await obtenerColumnasTabla(schema, table);
@@ -2508,28 +2794,31 @@
                     }
                 );
 
-            columnSelect.innerHTML = `
-                <option value="">
-                    Seleccione columna
-                </option>
+            actualizarSelectBuscable(
+                columnSelect,
+                `
+                    <option value="">
+                        Seleccione columna
+                    </option>
 
-                ${available
-                    .map(
-                        column => `
-                            <option
-                                value="${column.name}"
-                                data-type="${column.dataType}">
+                    ${available
+                        .map(
+                            column => `
+                                <option
+                                    value="${column.name}"
+                                    data-type="${column.dataType}">
 
-                                ${column.name}
-                                (${column.dataType})
+                                    ${column.name}
+                                    (${column.dataType})
 
-                            </option>
-                        `
-                    )
-                    .join("")}
-            `;
-
-            columnSelect.disabled = false;
+                                </option>
+                            `
+                        )
+                        .join("")}
+                `,
+                "",
+                false
+            );
         }
         catch (error) {
             await AppAlert.error("No fue posible cargar las columnas", error.message);
@@ -2588,6 +2877,7 @@
                 const schema = option?.dataset.schema;
                 const table = option?.dataset.table;
                 const columnSelect = condition.querySelector(".metric-condition-column");
+                const sourceId = option?.dataset.sourceId;
                 columnSelect.disabled = true;
 
                 if (!schema || !table) {
@@ -2596,32 +2886,34 @@
 
                 const columns = await obtenerColumnasTabla(schema, table);
 
-                columnSelect.innerHTML = `
-                    <option value="">
-                        Seleccione columna
-                    </option>
+                actualizarSelectBuscable(
+                    columnSelect,
+                    `
+                        <option value="">
+                            Seleccione columna
+                        </option>
 
-                    ${columns
-                        .map(
-                            column => `
-                                <option
-                                    value="${column.name}"
-                                    data-schema="${schema}"
-                                    data-table="${table}"
-                                    data-type="${column.dataType}">
+                        ${columns
+                            .map(
+                                column => `
+                                    <option
+                                        value="${column.name}"
+                                        data-source-id="${sourceId}"
+                                        data-schema="${schema}"
+                                        data-table="${table}"
+                                        data-type="${column.dataType}">
 
-                                    ${column.name}
-                                    (${column.dataType})
+                                        ${column.name}
+                                        (${column.dataType})
 
-                                </option>
-                            `
-                        )
-                        .join("")}
-                `;
-
-
-                columnSelect.disabled =
-                    false;
+                                    </option>
+                                `
+                            )
+                            .join("")}
+                    `,
+                    "",
+                    false
+                );
             }
 
             if (event.target.classList.contains("metric-condition-column")) {
@@ -2856,6 +3148,11 @@
         `;
 
         container.appendChild(condition);
+        activarSelectBuscable(
+            condition.querySelector(
+                ".metric-condition-table"
+            )
+        );
         actualizarConectoresCondicionesMetrica(metric);
         actualizarEstadoCondicionesMetrica(metric);
     }
@@ -2903,9 +3200,11 @@
                     return {
                         function: functionName,
                         schema: countAll ? "" : tableOption?.dataset.schema ?? "",
+                        sourceId: countAll ? "" : tableOption?.dataset.sourceId ?? "",
                         table: countAll ? "" : tableOption?.dataset.table ?? "",
                         column: countAll ? "" : metric.querySelector(".metric-column").value,
                         alias: metric.querySelector(".metric-alias").value.trim(),
+                        order: Number(metric.dataset.outputOrder) || 0,
                         distinct: metric.querySelector(".metric-distinct").checked,
                         nullAsZero: metric.querySelector(".metric-null-zero").checked,
                         conditions: obtenerCondicionesMetrica(metric),
@@ -2930,6 +3229,7 @@
                     return {
                         logicalOperator: condition.querySelector(".metric-condition-logical").value,
                         schema: column?.dataset.schema ?? "",
+                        sourceId: column?.dataset.sourceId ?? "",
                         table: column?.dataset.table ?? "",
                         column: column?.value ?? "",
                         operator: operator,
@@ -2941,6 +3241,7 @@
     }
 
     function limpiarMetricas() {
+        destruirSelectsBuscablesDentro(reportMetrics);
         reportMetrics.innerHTML ="";
         reportMetricsEmpty.classList.remove("d-none");
         actualizarBadge(metricsCountBadge, 0);
@@ -3000,6 +3301,7 @@
         const item = document.createElement("div");
 
         item.className ="report-query-item report-conditional-column-item";
+        item.dataset.outputOrder =obtenerSiguienteOrdenSalida();
         item.innerHTML = `
             <div class="report-query-item-header">
 
@@ -3391,6 +3693,11 @@
         `;
 
         container.appendChild(condition);
+        activarSelectBuscable(
+            condition.querySelector(
+                ".conditional-condition-table"
+            )
+        );
         actualizarConectoresWhen(when);
     }
 
@@ -3499,11 +3806,18 @@
                 columnSelect.disabled = true;
                 operatorSelect.disabled = true;
                 input.disabled = true;
-                columnSelect.innerHTML = `
-                    <option value="">
-                        Cargando...
-                    </option>
-                `;
+                const sourceId = option?.dataset.sourceId;
+
+                actualizarSelectBuscable(
+                    columnSelect,
+                    `
+                        <option value="">
+                            Cargando...
+                        </option>
+                    `,
+                    "",
+                    true
+                );
 
                 if (!schema || !table) {
                     return;
@@ -3511,29 +3825,35 @@
 
                 try {
                     const columns = await obtenerColumnasTabla(schema, table);
+                    actualizarSelectBuscable(
+                        columnSelect,
+                        `
+                            <option value="">
+                                Seleccione columna
+                            </option>
 
-                    columnSelect.innerHTML = `
-                        <option value="">
-                            Seleccione columna
-                        </option>
+                            ${columns
+                                .map(
+                                    column => `
+                                        <option
+                                            value="${column.name}"
+                                            data-source-id="${sourceId}"
+                                            data-schema="${schema}"
+                                            data-table="${table}"
+                                            data-column="${column.name}"
+                                            data-type="${column.dataType}">
 
-                        ${columns
-                            .map(
-                                column => `
-                                    <option
-                                        value="${column.name}"
-                                        data-schema="${schema}"
-                                        data-table="${table}"
-                                        data-type="${column.dataType}">
-                                        ${column.name}
-                                        (${column.dataType})
-                                    </option>
-                                `
-                            )
-                            .join("")}
-                    `;
+                                            ${column.name}
+                                            (${column.dataType})
 
-                    columnSelect.disabled = false;
+                                        </option>
+                                    `
+                                )
+                                .join("")}
+                        `,
+                        "",
+                        false
+                    );
                 }
                 catch (error) {
                     await AppAlert.error("No fue posible cargar las columnas", error.message);
@@ -3658,6 +3978,11 @@
             valueFields.classList.add("d-none");
             valueTypeWrapper.classList.add("d-none");
             columnFields.classList.remove("d-none");
+            activarSelectBuscable(
+                editor.querySelector(
+                    ".case-result-table"
+                )
+            );
             return;
         }
 
@@ -3722,32 +4047,41 @@
             return;
         }
 
-        columnSelect.innerHTML = `
-            <option value="">
-                Cargando...
-            </option>
-        `;
+        actualizarSelectBuscable(
+            columnSelect,
+            `
+                <option value="">
+                    Cargando...
+                </option>
+            `,
+            "",
+            true
+        );
 
         try {
             const columns = await obtenerColumnasTabla(schema, table);
 
-            columnSelect.innerHTML = `
-                <option value="">
-                    Seleccione columna
-                </option>
-                ${columns
-                    .map(
-                        column => `
-                            <option value="${column.name}">
-                                ${column.name}
-                                (${column.dataType})
-                            </option>
-                        `
-                    )
-                    .join("")}
-            `;
+            actualizarSelectBuscable(
+                columnSelect,
+                `
+                    <option value="">
+                        Seleccione columna
+                    </option>
 
-            columnSelect.disabled = false;
+                    ${columns
+                        .map(
+                            column => `
+                                <option value="${column.name}">
+                                    ${column.name}
+                                    (${column.dataType})
+                                </option>
+                            `
+                        )
+                        .join("")}
+                `,
+                "",
+                false
+            );
         }
         catch (error) {
             await AppAlert.error("No fue posible cargar las columnas", error.message);
@@ -3770,6 +4104,7 @@
 
                     return {
                         alias: conditional.querySelector(".conditional-column-alias").value.trim(),
+                        order:Number(conditional.dataset.outputOrder) || 0,
                         cases: cases,
                         elseResult: obtenerResultadoCase( conditional.querySelector(".conditional-else-result"))
                     };
@@ -3788,6 +4123,7 @@
 
                     return {
                         logicalOperator: condition.querySelector(".conditional-condition-logical").value,
+                        sourceId: column?.dataset.sourceId ??"",
                         schema: column?.dataset.schema ?? "",
                         table: column?.dataset.table ?? "",
                         column: column?.value ?? "",
@@ -3809,6 +4145,7 @@
                 resultType: "COLUMN",
                 value: null,
                 valueType: "string",
+                sourceId: table?.dataset.sourceId ?? "",
                 schema: table?.dataset.schema ?? "",
                 table: table?.dataset.table ?? "",
                 column: editor.querySelector(".case-result-column").value
@@ -3820,6 +4157,7 @@
                 resultType: "NULL",
                 value: null,
                 valueType: "string",
+                sourceId: "",
                 schema: "",
                 table: "",
                 column: ""
@@ -3830,29 +4168,971 @@
             resultType: "VALUE",
             value: editor.querySelector(".case-result-value").value,
             valueType: editor.querySelector(".case-result-value-type").value,
+            sourceId: "",
             schema: "",
             table: "",
             column: ""
         };
     }
 
-    function validarResultadoCase(result, description) {
+    function validarResultadoCase(
+        result,
+        description
+    ) {
 
-        if (result.resultType === "COLUMN") {
-            if (!result.schema || !result.table || !result.column) {
+        if (
+            result.resultType ===
+            "COLUMN"
+        ) {
+
+            if (
+                !result.sourceId ||
+                !result.schema ||
+                !result.table ||
+                !result.column
+            ) {
                 return {
                     valid: false,
-                    message: `${description}: seleccione la columna que será devuelta.`
+
+                    message:
+                        `${description}: seleccione la columna que será devuelta.`
                 };
             }
         }
 
-        return { valid: true };
+
+        return {
+            valid: true
+        };
     }
 
     function limpiarColumnasCondicionales() {
+        destruirSelectsBuscablesDentro(reportConditionalColumns);
         reportConditionalColumns.innerHTML = "";
         reportConditionalColumnsEmpty.classList.remove("d-none");
         actualizarBadge(conditionalColumnsCountBadge, 0);
     }
+
+    function obtenerSiguienteOrdenSalida() {
+        outputOrderSequence++;
+        return outputOrderSequence;
+    }
+
+    function obtenerAliasColumna(checkbox) {
+        const item = checkbox.closest(".report-column-item");
+        const alias = item.querySelector(".report-column-alias")?.value?.trim();
+        return alias ? alias : null;
+    }
+
+    function agregarColumnaConcatenada() {
+        const sources =
+            obtenerTablasEnConsulta();
+
+
+        if (sources.length === 0) {
+
+            AppAlert.warning(
+                "Sin fuentes disponibles",
+                "No existen tablas disponibles para crear la columna combinada."
+            );
+
+            return;
+        }
+
+
+        reportConcatColumnsEmpty
+            .classList
+            .add(
+                "d-none"
+            );
+
+
+        const item =
+            document.createElement(
+                "div"
+            );
+
+
+        item.className =
+            "report-query-item report-concat-item";
+
+
+        item.dataset.outputOrder =
+            obtenerSiguienteOrdenSalida();
+
+
+        item.innerHTML = `
+            <div class="report-query-item-header">
+
+                <div>
+
+                    <div class="report-query-item-title">
+                        Columna combinada
+                    </div>
+
+                    <div class="text-muted small">
+                        Las columnas se concatenarán
+                        en el orden mostrado.
+                    </div>
+
+                </div>
+
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger
+                               btn-remove-concat">
+
+                    Quitar
+
+                </button>
+
+            </div>
+
+
+            <div class="concat-parts">
+            </div>
+
+
+            <div class="mt-3">
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary
+                               btn-add-concat-part">
+
+                    <i class="fa fa-plus"></i>
+
+                    Agregar columna
+
+                </button>
+
+            </div>
+
+
+            <div class="report-query-grid mt-3">
+
+                <div>
+
+                    <label class="report-field-label">
+                        Separador
+                    </label>
+
+                    <select class="form-select concat-separator">
+
+                        <option value=" ">
+                            Espacio
+                        </option>
+
+                        <option value=", ">
+                            Coma + espacio
+                        </option>
+
+                        <option value=" - ">
+                            Guion
+                        </option>
+
+                        <option value="">
+                            Sin separador
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div>
+
+                    <label class="report-field-label">
+                        Alias
+                    </label>
+
+                    <input
+                        type="text"
+                        class="form-control concat-alias"
+                        placeholder="Ej. NombreCompleto" />
+
+                </div>
+
+            </div>
+        `;
+
+
+        reportConcatColumns.appendChild(
+            item
+        );
+
+
+        agregarParteConcatenacion(
+            item
+        );
+
+        agregarParteConcatenacion(
+            item
+        );
+
+
+        actualizarBadge(
+            concatCountBadge,
+            reportConcatColumns.children.length
+        );
+
+
+        actualizarEstadoColumnas();
+    }
+
+    function agregarParteConcatenacion(
+        concatItem
+    ) {
+
+        const container =
+            concatItem.querySelector(
+                ".concat-parts"
+            );
+
+
+        const part =
+            document.createElement(
+                "div"
+            );
+
+
+        part.className =
+            "concat-part-item report-query-grid mb-2";
+
+
+        part.innerHTML = `
+            <div>
+
+                <label class="report-field-label">
+                    Orden
+                </label>
+
+                <div class="concat-part-order
+                            badge
+                            bg-secondary">
+                </div>
+
+            </div>
+
+
+            <div>
+
+                <label class="report-field-label">
+                    Fuente
+                </label>
+
+                <select class="form-select concat-source">
+
+                    <option value="">
+                        Seleccione fuente
+                    </option>
+
+                    ${obtenerOpcionesTablasConsulta()}
+
+                </select>
+
+            </div>
+
+
+            <div>
+
+                <label class="report-field-label">
+                    Columna
+                </label>
+
+                <select
+                    class="form-select concat-part-column"
+                    disabled>
+
+                    <option value="">
+                        Seleccione primero una fuente
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div>
+
+                <label class="report-field-label">
+                    Acciones
+                </label>
+
+                <div class="d-flex gap-1">
+
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-secondary
+                               btn-concat-up"
+                        title="Subir">
+
+                        ↑
+
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-secondary
+                               btn-concat-down"
+                        title="Bajar">
+
+                        ↓
+
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-danger
+                               btn-remove-concat-part"
+                        title="Quitar">
+
+                        ×
+
+                    </button>
+
+                </div>
+
+            </div>
+        `;
+
+
+        container.appendChild(
+            part
+        );
+
+
+        activarSelectBuscable(
+            part.querySelector(
+                ".concat-source"
+            )
+        );
+
+
+        actualizarOrdenPartesConcatenacion(
+            concatItem
+        );
+    }
+
+    function actualizarOrdenPartesConcatenacion(
+        item
+    ) {
+
+        const parts =
+            Array.from(
+                item.querySelectorAll(
+                    ".concat-part-item"
+                )
+            );
+
+
+        parts.forEach(
+            (part, index) => {
+
+                part.querySelector(
+                    ".concat-part-order"
+                ).textContent =
+                    index + 1;
+
+
+                part.querySelector(
+                    ".btn-concat-up"
+                ).disabled =
+                    index === 0;
+
+
+                part.querySelector(
+                    ".btn-concat-down"
+                ).disabled =
+                    index ===
+                    parts.length - 1;
+            }
+        );
+    }
+
+    reportConcatColumns.addEventListener(
+        "change",
+        async function (event) {
+
+            if (
+                !event.target.classList.contains(
+                    "concat-source"
+                )
+            ) {
+                actualizarEstadoColumnas();
+                return;
+            }
+
+
+            const part =
+                event.target.closest(
+                    ".concat-part-item"
+                );
+
+
+            const option =
+                event.target.selectedOptions[0];
+
+
+            const schema =
+                option?.dataset.schema;
+
+            const table =
+                option?.dataset.table;
+
+
+            const columnSelect =
+                part.querySelector(
+                    ".concat-part-column"
+                );
+
+
+            if (!schema || !table) {
+
+                actualizarSelectBuscable(
+                    columnSelect,
+                    `
+                        <option value="">
+                            Seleccione primero una fuente
+                        </option>
+                    `,
+                    "",
+                    true
+                );
+
+                return;
+            }
+
+
+            try {
+
+                const columns =
+                    await obtenerColumnasTabla(
+                        schema,
+                        table
+                    );
+
+
+                const availableColumns =
+                    columns.filter(
+                        column =>
+                            esTipoConcatenable(
+                                column.dataType
+                            )
+                    );
+
+
+                actualizarSelectBuscable(
+                    columnSelect,
+                    `
+                        <option value="">
+                            Seleccione columna
+                        </option>
+
+                        ${availableColumns
+                            .map(
+                                column => `
+                                    <option
+                                        value="${column.name}"
+                                        data-type="${column.dataType}">
+
+                                        ${column.name}
+                                        (${column.dataType})
+
+                                    </option>
+                                `
+                            )
+                            .join("")}
+                    `,
+                    "",
+                    false
+                );
+
+            }
+            catch (error) {
+
+                await AppAlert.error(
+                    "No fue posible cargar las columnas",
+                    error.message
+                );
+            }
+
+
+            actualizarEstadoColumnas();
+        }
+    );
+
+    reportConcatColumns.addEventListener(
+        "click",
+        function (event) {
+
+            // ======================================
+            // AGREGAR PARTE
+            // ======================================
+
+            const addPart =
+                event.target.closest(
+                    ".btn-add-concat-part"
+                );
+
+
+            if (addPart) {
+
+                const item =
+                    addPart.closest(
+                        ".report-concat-item"
+                    );
+
+                agregarParteConcatenacion(
+                    item
+                );
+
+                actualizarEstadoColumnas();
+
+                return;
+            }
+
+
+            // ======================================
+            // SUBIR
+            // ======================================
+
+            const up =
+                event.target.closest(
+                    ".btn-concat-up"
+                );
+
+
+            if (up) {
+
+                const part =
+                    up.closest(
+                        ".concat-part-item"
+                    );
+
+                const previous =
+                    part.previousElementSibling;
+
+
+                if (previous) {
+
+                    part.parentElement.insertBefore(
+                        part,
+                        previous
+                    );
+                }
+
+
+                const item =
+                    part.closest(
+                        ".report-concat-item"
+                    );
+
+
+                actualizarOrdenPartesConcatenacion(
+                    item
+                );
+
+                actualizarEstadoColumnas();
+
+                return;
+            }
+
+
+            // ======================================
+            // BAJAR
+            // ======================================
+
+            const down =
+                event.target.closest(
+                    ".btn-concat-down"
+                );
+
+
+            if (down) {
+
+                const part =
+                    down.closest(
+                        ".concat-part-item"
+                    );
+
+                const next =
+                    part.nextElementSibling;
+
+
+                if (next) {
+
+                    part.parentElement.insertBefore(
+                        next,
+                        part
+                    );
+                }
+
+
+                const item =
+                    part.closest(
+                        ".report-concat-item"
+                    );
+
+
+                actualizarOrdenPartesConcatenacion(
+                    item
+                );
+
+                actualizarEstadoColumnas();
+
+                return;
+            }
+
+
+            // ======================================
+            // QUITAR PARTE
+            // ======================================
+
+            const removePart =
+                event.target.closest(
+                    ".btn-remove-concat-part"
+                );
+
+
+            if (removePart) {
+
+                const part =
+                    removePart.closest(
+                        ".concat-part-item"
+                    );
+
+                const item =
+                    part.closest(
+                        ".report-concat-item"
+                    );
+
+
+                destruirSelectsBuscablesDentro(
+                    part
+                );
+
+
+                part.remove();
+
+
+                actualizarOrdenPartesConcatenacion(
+                    item
+                );
+
+                actualizarEstadoColumnas();
+
+                return;
+            }
+
+
+            // ======================================
+            // QUITAR CONCAT COMPLETO
+            // ======================================
+
+            const removeConcat =
+                event.target.closest(
+                    ".btn-remove-concat"
+                );
+
+
+            if (!removeConcat) {
+                return;
+            }
+
+
+            const item =
+                removeConcat.closest(
+                    ".report-concat-item"
+                );
+
+
+            destruirSelectsBuscablesDentro(
+                item
+            );
+
+
+            item.remove();
+
+
+            if (
+                reportConcatColumns.children.length ===
+                0
+            ) {
+                reportConcatColumnsEmpty
+                    .classList
+                    .remove(
+                        "d-none"
+                    );
+            }
+
+
+            actualizarEstadoColumnas();
+
+
+            actualizarBadge(
+                concatCountBadge,
+                reportConcatColumns.children.length
+            );
+        }
+    );
+
+    function obtenerColumnasConcatenadas() {
+
+        return Array
+            .from(
+                reportConcatColumns.querySelectorAll(
+                    ".report-concat-item"
+                )
+            )
+            .map(
+                item => {
+
+                    const columns =
+                        Array
+                            .from(
+                                item.querySelectorAll(
+                                    ".concat-part-item"
+                                )
+                            )
+                            .map(
+                                part => {
+
+                                    const source =
+                                        part.querySelector(
+                                            ".concat-source"
+                                        )
+                                        .selectedOptions[0];
+
+
+                                    return {
+                                        sourceId:
+                                            source?.dataset.sourceId ??
+                                            "",
+
+                                        schema:
+                                            source?.dataset.schema ??
+                                            "",
+
+                                        table:
+                                            source?.dataset.table ??
+                                            "",
+
+                                        column:
+                                            part.querySelector(
+                                                ".concat-part-column"
+                                            ).value
+                                    };
+                                }
+                            )
+                            .filter(
+                                column =>
+                                    column.sourceId &&
+                                    column.schema &&
+                                    column.table &&
+                                    column.column
+                            );
+
+
+                    return {
+                        columns:
+                            columns,
+
+                        separator:
+                            item.querySelector(
+                                ".concat-separator"
+                            ).value,
+
+                        alias:
+                            item.querySelector(
+                                ".concat-alias"
+                            )
+                            .value
+                            .trim(),
+
+                        order:
+                            Number(
+                                item.dataset.outputOrder
+                            ) || 0
+                    };
+                }
+            );
+    }
+
+    function refrescarFuentesConsulta() {
+        const options = obtenerOpcionesTablasConsulta();
+        const selectors = [
+            ...reportFilters.querySelectorAll(
+                ".filter-table"
+            ),
+
+            ...reportMetrics.querySelectorAll(
+                ".metric-table"
+            ),
+
+            ...reportMetrics.querySelectorAll(
+                ".metric-condition-table"
+            ),
+
+            ...reportConditionalColumns.querySelectorAll(
+                ".conditional-condition-table"
+            ),
+
+            ...reportConditionalColumns.querySelectorAll(
+                ".case-result-table"
+            ),
+
+            ...reportConcatColumns.querySelectorAll(
+                ".concat-source"
+            )
+        ];
+
+        selectors.forEach(
+            select => {
+
+                const currentValue =
+                    select.value;
+
+
+                actualizarSelectBuscable(
+                    select,
+                    `
+                        <option value="">
+                            Seleccione fuente
+                        </option>
+
+                        ${options}
+                    `,
+                    currentValue,
+                    false
+                );
+            }
+        );
+    }
+
+    function refrescarFuentesOrigenJoins() {
+        const joins =
+            Array.from(
+                reportJoins.querySelectorAll(
+                    ".report-join-item"
+                )
+            );
+
+        joins.forEach(
+            join => {
+                const select =
+                    join.querySelector(
+                        ".join-left-table"
+                    );
+                const currentSourceId = select.value;
+                const sources = obtenerTablasEnConsulta(join);
+                const options =
+                    sources
+                        .map(
+                            source => `
+                                <option
+                                    value="${source.sourceId}"
+                                    data-source-id="${source.sourceId}"
+                                    data-schema="${source.schema}"
+                                    data-table="${source.table}">
+
+                                    ${source.label}
+
+                                </option>
+                            `
+                        )
+                        .join("");
+
+                actualizarSelectBuscable(
+                    select,
+                    `
+                        <option value="">
+                            Seleccione fuente
+                        </option>
+
+                        ${options}
+                    `,
+                    currentSourceId,
+                    false
+                );
+            }
+        );
+    }
+
+    reportJoins.addEventListener(
+        "input",
+        function (event) {
+
+            if (
+                !event.target.classList.contains(
+                    "join-source-alias"
+                )
+            ) {
+                return;
+            }
+
+
+            const join =
+                event.target.closest(
+                    ".report-join-item"
+                );
+
+
+            actualizarDescripcionJoin(
+                join
+            );
+
+
+            const tableOption =
+                join.querySelector(
+                    ".join-table"
+                )
+                ?.selectedOptions[0];
+
+
+            const schema =
+                tableOption?.dataset.schema;
+
+            const table =
+                tableOption?.dataset.table;
+
+
+            if (schema && table) {
+
+                const group =
+                    reportColumns.querySelector(
+                        `.report-column-group[data-source-id="${join.dataset.sourceId}"]`
+                    );
+
+
+                if (group) {
+
+                    const alias =
+                        event.target.value.trim();
+
+
+                    const title =
+                        group.querySelector(
+                            ".report-column-group-title"
+                        );
+
+
+                    title.innerHTML = `
+                        ${
+                            alias
+                                ? `${alias} — ${schema}.${table}`
+                                : `${schema}.${table}`
+                        }
+
+                        <span class="badge bg-light text-dark border ms-2">
+                            Relacionada
+                        </span>
+                    `;
+                }
+            }
+
+
+            refrescarFuentesOrigenJoins();
+            refrescarFuentesConsulta();
+        }
+    );
 })();

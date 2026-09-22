@@ -1,7 +1,8 @@
-﻿using System.Data;
-using System.Text;
-using Microsoft.Data.SqlClient;
+﻿using Microsoft.Data.SqlClient;
 using SqlDataImporter.Models;
+using System.Data;
+using System.Globalization;
+using System.Text;
 
 namespace SqlDataImporter.Services
 {
@@ -35,16 +36,20 @@ namespace SqlDataImporter.Services
 
             sql.AppendLine();
 
-            var selectExpressions = new List<string>();
+            var selectExpressions = new List<ReportSelectExpression>();
 
             foreach (var column in request.Columns)
             {
-                var alias = GetTableAlias(tableAliases, column.Schema, column.Table);
-
+                var alias = GetTableAlias(tableAliases, column.SourceId);
+                var expression = $"{Quote(alias)}.{Quote(column.Column)}";
                 var outputName = ResolveOutputName(column.Alias, column.Table, column.Column, outputNames);
 
                 selectExpressions.Add(
-                    $"    {Quote(alias)}.{Quote(column.Column)} AS {Quote(outputName)}"
+                   new ReportSelectExpression
+                   {
+                       Order = column.Order,
+                       Sql = $"    {expression} AS {Quote(outputName)}"
+                   }
                 );
             }
 
@@ -71,7 +76,7 @@ namespace SqlDataImporter.Services
                 {
                     var column = concat.Columns[i];
 
-                    var alias = GetTableAlias(tableAliases, column.Schema, column.Table);
+                    var alias = GetTableAlias(tableAliases, column.SourceId);
 
                     concatParts.Add(
                         $"{Quote(alias)}.{Quote(column.Column)}"
@@ -92,10 +97,15 @@ namespace SqlDataImporter.Services
                     }
                 }
 
+                var expression = $"CONCAT({string.Join(", ", concatParts)})";
                 var outputName = ResolveOutputName(concat.Alias, "concat", concat.Alias, outputNames);
 
                 selectExpressions.Add(
-                    $"    CONCAT({string.Join(", ", concatParts)}) AS {Quote(outputName)}"
+                     new ReportSelectExpression
+                     {
+                         Order = concat.Order,
+                         Sql = $"    {expression} AS {Quote(outputName)}"
+                     }
                 );
             }
 
@@ -104,9 +114,15 @@ namespace SqlDataImporter.Services
             // =====================================
             foreach (var conditional in request.ConditionalColumns)
             {
-                var expression = BuildConditionalColumnExpression(conditional, tableAliases, result.Parameters, ref parameterIndex);
+                var expression = BuildConditionalColumnExpression(conditional, tableAliases, result.Parameters, metadata, ref parameterIndex);
                 var outputName = ResolveOutputName(conditional.Alias, "case", conditional.Alias, outputNames);
-                selectExpressions.Add($"    {expression} AS {Quote(outputName)}");
+                selectExpressions.Add(
+                    new ReportSelectExpression
+                    {
+                        Order = conditional.Order,
+                        Sql = $"    {expression} AS {Quote(outputName)}"
+                    }
+                );
             }
 
             // =====================================
@@ -115,11 +131,15 @@ namespace SqlDataImporter.Services
 
             foreach (var metric in request.Metrics)
             {
-                var expression = BuildMetricExpression(metric, tableAliases, result.Parameters, ref parameterIndex);
+                var expression = BuildMetricExpression(metric, tableAliases, result.Parameters, metadata, ref parameterIndex);
                 var outputName = ResolveOutputName(metric.Alias, "metric", metric.Alias, outputNames);
 
                 selectExpressions.Add(
-                    $"    {expression} AS {Quote(outputName)}"
+                    new ReportSelectExpression
+                    {
+                        Order = metric.Order,
+                        Sql = $"    {expression} AS {Quote(outputName)}"
+                    }
                 );
             }
 
@@ -128,14 +148,19 @@ namespace SqlDataImporter.Services
                 throw new InvalidOperationException("Debe seleccionar al menos una columna.");
             }
 
-            sql.AppendLine(
-                string.Join(
-                    "," + Environment.NewLine,
-                    selectExpressions
-                )
-            );
+            var orderedSelectExpressions =
+                selectExpressions
+                    .OrderBy(
+                        item => item.Order <= 0 ? int.MaxValue : item.Order
+                    )
+                    .Select(
+                        item => item.Sql
+                    )
+                    .ToList();
 
-            var mainAlias = GetTableAlias(tableAliases, request.MainSchema, request.MainTable);
+            sql.AppendLine(string.Join("," + Environment.NewLine, orderedSelectExpressions));
+
+            var mainAlias = GetTableAlias(tableAliases, GetMainSourceId(request));
 
             sql.AppendLine();
             sql.Append($"FROM {Quote(request.MainSchema)}.{Quote(request.MainTable)} AS {Quote(mainAlias)}");
@@ -161,60 +186,39 @@ namespace SqlDataImporter.Services
                     );
                 }
 
-                var leftAlias =
-                    GetTableAlias(
-                        tableAliases,
-                        join.LeftSchema,
-                        join.LeftTable
-                    );
-
-                var rightAlias =
-                    GetTableAlias(
-                        tableAliases,
-                        join.RightSchema,
-                        join.RightTable
-                    );
+                var leftAlias = GetTableAlias(tableAliases, join.LeftSourceId);
+                var rightAlias = GetTableAlias(tableAliases,join.RightSourceId);
 
                 sql.AppendLine();
                 sql.AppendLine();
-
                 sql.Append(
                     $"{joinType} JOIN "
                 );
-
                 sql.Append(
                     $"{Quote(join.RightSchema)}.{Quote(join.RightTable)} AS {Quote(rightAlias)}"
                 );
-
                 sql.AppendLine();
-
                 sql.Append(
                     $"    ON {Quote(leftAlias)}.{Quote(join.LeftColumn)}"
                 );
-
                 sql.Append(
                     " = "
                 );
-
                 sql.Append(
                     $"{Quote(rightAlias)}.{Quote(join.RightColumn)}"
                 );
             }
 
-
             // =====================================
             // WHERE
             // =====================================
-
             if (request.Filters.Count > 0)
             {
                 sql.AppendLine();
                 sql.AppendLine();
-
                 sql.AppendLine(
                     "WHERE"
                 );
-
 
                 for (var i = 0; i < request.Filters.Count; i++)
                 {
@@ -237,7 +241,7 @@ namespace SqlDataImporter.Services
                         );
                     }
 
-                    AppendFilter(sql, result.Parameters, tableAliases, filter, ref parameterIndex);
+                    AppendFilter(sql, result.Parameters, tableAliases, metadata, filter, ref parameterIndex);
 
                     if (i < request.Filters.Count - 1)
                     {
@@ -267,7 +271,7 @@ namespace SqlDataImporter.Services
 
                 foreach (var order in request.OrderBy)
                 {
-                    var alias = GetTableAlias(tableAliases, order.Schema, order.Table);
+                    var alias = GetTableAlias(tableAliases, order.SourceId);
 
                     var direction =
                         order.Direction
@@ -294,16 +298,18 @@ namespace SqlDataImporter.Services
         // =========================================
         // FILTROS
         // =========================================
-
         private static void AppendFilter(
             StringBuilder sql,
             List<SqlParameter> parameters,
             Dictionary<string, string> aliases,
+            Dictionary<string, ReportColumnMetadata> metadata,
             ReportFilter filter,
             ref int parameterIndex
         )
         {
-            var tableAlias = GetTableAlias(aliases, filter.Schema, filter.Table);
+            var metadataKey = ColumnKey(filter.Schema, filter.Table, filter.Column);
+            var columnMetadata = metadata[metadataKey];
+            var tableAlias = GetTableAlias(aliases, filter.SourceId);
             var expression = $"{Quote(tableAlias)}.{Quote(filter.Column)}";
             var op = filter.Operator.ToUpperInvariant();
 
@@ -318,7 +324,7 @@ namespace SqlDataImporter.Services
                     {
                         var parameterName = $"@p{parameterIndex++}";
                         sql.Append($"{expression} {op} {parameterName}");
-                        parameters.Add(new SqlParameter(parameterName, filter.Value ?? (object)DBNull.Value));
+                        parameters.Add(CreateTypedParameter(parameterName, filter.Value, columnMetadata));
                         break;
                     }
 
@@ -366,7 +372,7 @@ namespace SqlDataImporter.Services
                         {
                             var parameterName = $"@p{parameterIndex++}";
                             parameterNames.Add(parameterName);
-                            parameters.Add(new SqlParameter(parameterName, value));
+                            parameters.Add(CreateTypedParameter(parameterName, value, columnMetadata));
                         }
 
                         var sqlOperator = op == "IN" ? "IN" : "NOT IN";
@@ -374,7 +380,21 @@ namespace SqlDataImporter.Services
 
                         break;
                     }
+                    case "BETWEEN":
+                    {
+                        if (string.IsNullOrWhiteSpace(filter.Value) || string.IsNullOrWhiteSpace(filter.ValueTo))
+                        {
+                            throw new InvalidOperationException("BETWEEN requiere un valor inicial y un valor final.");
+                        }
 
+                        var parameterFrom = $"@p{parameterIndex++}";
+                        var parameterTo = $"@p{parameterIndex++}";
+
+                        parameters.Add(CreateTypedParameter(parameterFrom, filter.Value, columnMetadata));
+                        parameters.Add(CreateTypedParameter(parameterTo, filter.ValueTo, columnMetadata));
+                        sql.Append($"{expression} BETWEEN {parameterFrom} AND {parameterTo}");
+                        break;
+                    }
 
                 default:
                     throw new InvalidOperationException($"Operador no permitido: {filter.Operator}");
@@ -400,39 +420,52 @@ namespace SqlDataImporter.Services
         // =========================================
         private static Dictionary<string, string> BuildTableAliases(ReportQueryRequest request)
         {
-            var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var mainKey = TableKey(request.MainSchema, request.MainTable);
-            aliases[mainKey] = "t0";
-
             var index = 1;
+            var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            aliases[GetMainSourceId(request)] = "t0";
 
             foreach (var join in request.Joins)
             {
-                var key = TableKey(join.RightSchema, join.RightTable);
-
-                if (!aliases.ContainsKey(key))
+                if (string.IsNullOrWhiteSpace(join.LeftSourceId))
                 {
-                    aliases[key] = $"t{index++}";
+                    throw new InvalidOperationException("La relación no tiene una fuente de origen.");
                 }
+
+                // El origen debe existir antes de este JOIN.
+                if (!aliases.ContainsKey(join.LeftSourceId))
+                {
+                    throw new InvalidOperationException(
+                        $"La fuente origen '{join.LeftSourceId}' " +
+                        "todavía no forma parte de la consulta."
+                    );
+                }
+
+                if (string.IsNullOrWhiteSpace(join.RightSourceId))
+                {
+                    throw new InvalidOperationException("Una relación no tiene identificador de fuente.");
+                }
+
+                if (aliases.ContainsKey(join.RightSourceId))
+                {
+                    throw new InvalidOperationException(
+                        $"La fuente '{join.RightSourceId}' está duplicada."
+                    );
+                }
+
+                aliases[join.RightSourceId] = $"t{index++}";
             }
 
             return aliases;
         }
-        private static string GetTableAlias(Dictionary<string, string> aliases, string schema, string table)
-        {
-            var key = TableKey(schema,table);
 
-            if (!aliases.TryGetValue(key, out var alias))
+        private static string GetTableAlias(Dictionary<string, string> aliases, string sourceId)
+        {
+            if (string.IsNullOrWhiteSpace(sourceId) || !aliases.TryGetValue(sourceId, out var alias))
             {
-                throw new InvalidOperationException($"La tabla {schema}.{table} no forma parte de la consulta.");
+                throw new InvalidOperationException($"La fuente '{sourceId}' no forma parte de la consulta.");
             }
 
             return alias;
-        }
-
-        private static string TableKey(string schema, string table)
-        {
-            return $"{schema}.{table}";
         }
 
         // =========================================
@@ -494,73 +527,131 @@ namespace SqlDataImporter.Services
             return $"{schema}.{table}.{column}";
         }
 
+        private static string SourceColumnKey(string sourceId, string schema, string table, string column)
+        {
+            return $"{sourceId}|{schema}.{table}.{column}";
+        }
+
         private static void ValidateRequest(ReportQueryRequest request, Dictionary<string, ReportColumnMetadata> metadata)
         {
             ValidateTableHasColumns(request.MainSchema, request.MainTable, metadata);
 
+            var sources = BuildSourceMap(request);
+
+            // =========================================
+            // FUENTE PRINCIPAL
+            // =========================================
+            ValidateSource(GetMainSourceId(request), request.MainSchema, request.MainTable, sources);
+
+            // =========================================
+            // COLUMNAS NORMALES
+            // =========================================
             foreach (var column in request.Columns)
             {
-                ValidateColumn(column.Schema, column.Table, column.Column, metadata);
+                ValidateReference(column, metadata, sources);
             }
 
+            // =========================================
+            // CONCATENACIONES
+            // =========================================
             foreach (var concat in request.ConcatColumns)
             {
                 foreach (var column in concat.Columns)
                 {
-                    ValidateColumn(column.Schema, column.Table, column.Column, metadata);
+                    ValidateReference(column, metadata, sources);
                 }
             }
 
+            // =========================================
+            // COLUMNAS CONDICIONALES
+            // =========================================
             foreach (var conditional in request.ConditionalColumns)
             {
-                ValidateConditionalColumn(conditional, metadata);
+                ValidateConditionalColumn(conditional, metadata, sources);
             }
 
+            // =========================================
+            // MÉTRICAS
+            // =========================================
             foreach (var metric in request.Metrics)
             {
-                ValidateMetric(metric, metadata);
+                ValidateMetric(metric, metadata, sources);
             }
 
+            // =========================================
+            // GROUP BY
+            // =========================================
             foreach (var group in request.GroupBy)
             {
-                ValidateColumn(group.Schema, group.Table, group.Column, metadata);
+                ValidateReference(group, metadata, sources);
             }
 
+            // =========================================
+            // HAVING
+            // =========================================
             foreach (var having in request.Having)
             {
-                ValidateColumn(having.Schema, having.Table, having.Column, metadata);
+                ValidateReference(having, metadata, sources);
             }
 
+            // =========================================
+            // JOINS
+            // =========================================
             foreach (var join in request.Joins)
             {
                 if (
-                    string.IsNullOrWhiteSpace(join.LeftSchema) ||
-                    string.IsNullOrWhiteSpace(join.LeftTable) ||
-                    string.IsNullOrWhiteSpace(join.LeftColumn) ||
-                    string.IsNullOrWhiteSpace(join.RightSchema) ||
-                    string.IsNullOrWhiteSpace(join.RightTable) ||
-                    string.IsNullOrWhiteSpace(join.RightColumn)
+                    string.IsNullOrWhiteSpace(
+                        join.LeftSchema
+                    ) ||
+                    string.IsNullOrWhiteSpace(
+                        join.LeftTable
+                    ) ||
+                    string.IsNullOrWhiteSpace(
+                        join.LeftColumn
+                    ) ||
+                    string.IsNullOrWhiteSpace(
+                        join.RightSchema
+                    ) ||
+                    string.IsNullOrWhiteSpace(
+                        join.RightTable
+                    ) ||
+                    string.IsNullOrWhiteSpace(
+                        join.RightColumn
+                    ) ||
+                    string.IsNullOrWhiteSpace(
+                        join.LeftSourceId
+                    ) ||
+                    string.IsNullOrWhiteSpace(
+                        join.RightSourceId
+                    )
                 )
                 {
                     throw new InvalidOperationException(
-                        $"La relación con {join.LeftTable} está incompleta. " +
-                        "Seleccione la tabla origen, columna origen, " +
-                        "tabla relacionada y columna relacionada."
+                        "La relación está incompleta. " +
+                        "Seleccione ambas fuentes, tablas y columnas."
                     );
                 }
 
+                ValidateSource(join.LeftSourceId, join.LeftSchema, join.LeftTable, sources);
+                ValidateSource(join.RightSourceId, join.RightSchema, join.RightTable,sources);
                 ValidateColumn(join.LeftSchema, join.LeftTable, join.LeftColumn, metadata);
                 ValidateColumn(join.RightSchema, join.RightTable, join.RightColumn, metadata);
             }
 
+            // =========================================
+            // FILTROS
+            // =========================================
             foreach (var filter in request.Filters)
             {
-                ValidateColumn(filter.Schema, filter.Table, filter.Column, metadata);
+                ValidateReference(filter, metadata, sources);
             }
 
+            // =========================================
+            // ORDER BY
+            // =========================================
             foreach (var order in request.OrderBy)
             {
-                ValidateColumn(order.Schema, order.Table, order.Column, metadata);
+                ValidateReference(order, metadata, sources);
             }
         }
 
@@ -640,13 +731,15 @@ namespace SqlDataImporter.Services
 
         private static void ValidateMetric(
     ReportMetric metric,
-    Dictionary<string, ReportColumnMetadata> metadata
+    Dictionary<string, ReportColumnMetadata> metadata,
+    Dictionary<string, (string Schema, string Table)> sources
 )
         {
             var function =
                 (metric.Function ?? string.Empty)
                     .Trim()
                     .ToUpperInvariant();
+
 
             var allowedFunctions =
                 new[]
@@ -658,6 +751,7 @@ namespace SqlDataImporter.Services
             "MAX"
                 };
 
+
             if (!allowedFunctions.Contains(function))
             {
                 throw new InvalidOperationException(
@@ -665,7 +759,12 @@ namespace SqlDataImporter.Services
                 );
             }
 
-            if (string.IsNullOrWhiteSpace(metric.Alias))
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    metric.Alias
+                )
+            )
             {
                 throw new InvalidOperationException(
                     "Toda métrica debe tener un alias."
@@ -676,16 +775,17 @@ namespace SqlDataImporter.Services
             // COUNT(*) puede no tener columna.
             var countAll =
                 function == "COUNT" &&
-                string.IsNullOrWhiteSpace(metric.Column);
+                string.IsNullOrWhiteSpace(
+                    metric.Column
+                );
 
 
             if (!countAll)
             {
-                ValidateColumn(
-                    metric.Schema,
-                    metric.Table,
-                    metric.Column,
-                    metadata
+                ValidateReference(
+                    metric,
+                    metadata,
+                    sources
                 );
 
 
@@ -699,7 +799,12 @@ namespace SqlDataImporter.Services
                     ];
 
 
-                if (function is "SUM" or "AVG" && !IsNumericType(columnMetadata.DataType))
+                if (
+                    function is "SUM" or "AVG" &&
+                    !IsNumericType(
+                        columnMetadata.DataType
+                    )
+                )
                 {
                     throw new InvalidOperationException(
                         $"{function} solamente puede utilizar columnas numéricas. " +
@@ -709,30 +814,57 @@ namespace SqlDataImporter.Services
                 }
             }
 
-            foreach (var condition in metric.Conditions)
+
+            if (metric.Conditions != null)
             {
-                ValidateColumn(condition.Schema, condition.Table, condition.Column, metadata);
+                foreach (
+                    var condition
+                    in metric.Conditions
+                )
+                {
+                    ValidateReference(
+                        condition,
+                        metadata,
+                        sources
+                    );
+                }
             }
 
-            if (metric.ArithmeticValue.HasValue)
+
+            if (
+                metric.ArithmeticValue.HasValue
+            )
             {
                 var allowedOperators =
                     new[]
                     {
-                        "+",
-                        "-",
-                        "*",
-                        "/"
+                "+",
+                "-",
+                "*",
+                "/"
                     };
 
-                if (string.IsNullOrWhiteSpace(metric.ArithmeticOperator) || !allowedOperators.Contains(metric.ArithmeticOperator))
+
+                if (
+                    string.IsNullOrWhiteSpace(
+                        metric.ArithmeticOperator
+                    ) ||
+                    !allowedOperators.Contains(
+                        metric.ArithmeticOperator
+                    )
+                )
                 {
-                    throw new InvalidOperationException("El operador aritmético de la métrica no es válido.");
+                    throw new InvalidOperationException(
+                        "El operador aritmético de la métrica no es válido."
+                    );
                 }
+
 
                 if (function == "COUNT")
                 {
-                    throw new InvalidOperationException("COUNT no admite transformación aritmética sobre la columna.");
+                    throw new InvalidOperationException(
+                        "COUNT no admite transformación aritmética sobre la columna."
+                    );
                 }
             }
         }
@@ -752,7 +884,12 @@ namespace SqlDataImporter.Services
                 or "real";
         }
 
-        private static string BuildMetricExpression(ReportMetric metric, Dictionary<string, string> aliases, List<SqlParameter> parameters, ref int parameterIndex)
+        private static string BuildMetricExpression(
+            ReportMetric metric,
+            Dictionary<string, string> aliases,
+            List<SqlParameter> parameters,
+            Dictionary<string, ReportColumnMetadata> metadata,
+            ref int parameterIndex)
         {
             var function = metric.Function.Trim().ToUpperInvariant();
 
@@ -763,12 +900,12 @@ namespace SqlDataImporter.Services
                     return "COUNT(*)";
                 }
 
-                var condition = BuildMetricConditions(metric.Conditions, aliases, parameters, ref parameterIndex);
+                var condition = BuildMetricConditions(metric.Conditions, aliases, parameters, metadata, ref parameterIndex);
 
                 return $"COUNT(CASE WHEN {condition} THEN 1 END)";
             }
 
-            var tableAlias = GetTableAlias(aliases, metric.Schema, metric.Table);
+            var tableAlias = GetTableAlias(aliases, metric.SourceId);
             var valueExpression = $"{Quote(tableAlias)}.{Quote(metric.Column)}";
 
             // =========================================
@@ -812,7 +949,7 @@ namespace SqlDataImporter.Services
             // =========================================
             // CASE WHEN
             // =========================================
-            var conditions = BuildMetricConditions(metric.Conditions, aliases, parameters, ref parameterIndex);
+            var conditions = BuildMetricConditions(metric.Conditions, aliases, parameters, metadata, ref parameterIndex);
 
             if (function == "COUNT")
             {
@@ -830,14 +967,19 @@ namespace SqlDataImporter.Services
                 $")";
         }
 
-        private static string BuildMetricConditions(List<ReportMetricCondition> conditions, Dictionary<string, string> aliases, List<SqlParameter> parameters, ref int parameterIndex)
+        private static string BuildMetricConditions(
+            List<ReportMetricCondition> conditions,
+            Dictionary<string, string> aliases,
+            List<SqlParameter> parameters,
+            Dictionary<string, ReportColumnMetadata> metadata,
+            ref int parameterIndex)
         {
             var expressions = new List<string>();
 
             for (var i = 0; i < conditions.Count; i++)
             {
                 var condition = conditions[i];
-                var expression = BuildMetricCondition(condition, aliases, parameters, ref parameterIndex);
+                var expression = BuildMetricCondition(condition, aliases, parameters, metadata, ref parameterIndex);
 
                 if (i > 0)
                 {
@@ -851,9 +993,17 @@ namespace SqlDataImporter.Services
             return string.Join(" ", expressions);
         }
 
-        private static string BuildMetricCondition(ReportMetricCondition condition, Dictionary<string, string> aliases, List<SqlParameter> parameters, ref int parameterIndex)
+        private static string BuildMetricCondition(
+            ReportMetricCondition condition,
+            Dictionary<string,
+            string> aliases,
+            List<SqlParameter> parameters,
+            Dictionary<string, ReportColumnMetadata> metadata,
+            ref int parameterIndex)
         {
-            var tableAlias = GetTableAlias(aliases, condition.Schema, condition.Table);
+            var metadataKey = ColumnKey(condition.Schema, condition.Table, condition.Column);
+            var columnMetadata = metadata[metadataKey];
+            var tableAlias = GetTableAlias(aliases, condition.SourceId);
             var column = $"{Quote(tableAlias)}.{Quote(condition.Column)}";
             var op = condition.Operator.Trim().ToUpperInvariant();
 
@@ -867,7 +1017,7 @@ namespace SqlDataImporter.Services
                 case "<=":
                     {
                         var parameterName = $"@p{parameterIndex++}";
-                        parameters.Add(new SqlParameter(parameterName, condition.Value ?? (object)DBNull.Value));
+                        parameters.Add(CreateTypedParameter(parameterName, condition.Value, columnMetadata));
                         return $"{column} {op} {parameterName}";
                     }
 
@@ -912,7 +1062,7 @@ namespace SqlDataImporter.Services
                         {
                             var parameterName = $"@p{parameterIndex++}";
                             names.Add(parameterName);
-                            parameters.Add(new SqlParameter(parameterName, value));
+                            parameters.Add(CreateTypedParameter(parameterName, value, columnMetadata));
                         }
 
                         var sqlOperator = op == "IN" ? "IN" : "NOT IN";
@@ -925,147 +1075,188 @@ namespace SqlDataImporter.Services
             }
         }
 
-        private static void AppendGroupBy(StringBuilder sql, ReportQueryRequest request, Dictionary<string, string> aliases)
-        {
-            if (request.Metrics == null || request.Metrics.Count == 0)
+        private static void AppendGroupBy(StringBuilder sql,ReportQueryRequest request, Dictionary<string, string> aliases)
             {
-                return;
-            }
-
-            var groupColumns = new Dictionary<string, ReportColumnReference>(StringComparer.OrdinalIgnoreCase);
-
-            // =========================================
-            // 1. COLUMNAS NORMALES DEL SELECT
-            // =========================================
-            foreach (var column in request.Columns)
-            {
-                var key =ColumnKey(column.Schema, column.Table, column.Column);
-                groupColumns[key] =
-                    new ReportColumnReference
-                    {
-                        Schema = column.Schema,
-                        Table = column.Table,
-                        Column = column.Column
-                    };
-            }
-
-            // =========================================
-            // 2. COLUMNAS UTILIZADAS EN CONCAT
-            // =========================================
-            foreach (var concat in request.ConcatColumns)
-            {
-                foreach (var column in concat.Columns)
+                if (request.Metrics == null || request.Metrics.Count == 0)
                 {
-                    var key = ColumnKey(column.Schema, column.Table, column.Column);
+                    return;
+                }
+
+                var groupColumns = new Dictionary<string, ReportColumnReference>( StringComparer.OrdinalIgnoreCase);
+
+
+                // =========================================
+                // COLUMNAS NORMALES
+                // =========================================
+                foreach (var column in request.Columns)
+                {
+                    var key =
+                        SourceColumnKey(
+                            column.SourceId,
+                            column.Schema,
+                            column.Table,
+                            column.Column
+                        );
+
                     groupColumns[key] =
                         new ReportColumnReference
                         {
+                            SourceId = column.SourceId,
                             Schema = column.Schema,
                             Table = column.Table,
                             Column = column.Column
                         };
                 }
-            }
 
-            // =========================================
-            // 3. COLUMNAS UTILIZADAS EN CASE WHEN
-            // =========================================
-            foreach (var conditional in request.ConditionalColumns)
-            {
-                if (conditional.Cases == null)
+                // =========================================
+                // CONCAT
+                // =========================================
+                foreach (var concat in request.ConcatColumns)
                 {
-                    continue;
+                    foreach (var column in concat.Columns)
+                    {
+                        var key =
+                            SourceColumnKey(
+                                column.SourceId,
+                                column.Schema,
+                                column.Table,
+                                column.Column
+                            );
+
+                        groupColumns[key] =
+                            new ReportColumnReference
+                            {
+                                SourceId = column.SourceId,
+                                Schema = column.Schema,
+                                Table = column.Table,
+                                Column = column.Column
+                            };
+                    }
                 }
 
-                foreach (var caseWhen in conditional.Cases)
+                // =========================================
+                // CASE WHEN
+                // =========================================
+                foreach (var conditional in request.ConditionalColumns)
                 {
-                    // -------------------------------------
-                    // Columnas utilizadas en el WHEN
-                    // -------------------------------------
-                    if (caseWhen.Conditions != null)
+                    foreach (var caseWhen in conditional.Cases)
                     {
                         foreach (var condition in caseWhen.Conditions)
                         {
-                            if (string.IsNullOrWhiteSpace(condition.Schema) || string.IsNullOrWhiteSpace(condition.Table) || string.IsNullOrWhiteSpace(condition.Column))
-                            {
-                                continue;
-                            }
+                            var key =
+                                SourceColumnKey(
+                                    condition.SourceId,
+                                    condition.Schema,
+                                    condition.Table,
+                                    condition.Column
+                                );
 
-                            var key = ColumnKey(condition.Schema, condition.Table, condition.Column);
                             groupColumns[key] =
                                 new ReportColumnReference
                                 {
-                                    Schema = condition.Schema,
-                                    Table = condition.Table,
-                                    Column = condition.Column
+                                    SourceId =
+                                        condition.SourceId,
+
+                                    Schema =
+                                        condition.Schema,
+
+                                    Table =
+                                        condition.Table,
+
+                                    Column =
+                                        condition.Column
                                 };
                         }
-                    }
 
-                    // -------------------------------------
-                    // Si THEN devuelve otra columna
-                    // -------------------------------------
-                    if (caseWhen.Result != null && string.Equals(caseWhen.Result.ResultType, "COLUMN", StringComparison.OrdinalIgnoreCase))
-                    {
-                        AddGroupByCaseResult(groupColumns, caseWhen.Result);
-                    }
-                }
-
-                // -----------------------------------------
-                // Si ELSE devuelve otra columna
-                // -----------------------------------------
-                if (conditional.ElseResult != null && string.Equals(conditional.ElseResult.ResultType, "COLUMN", StringComparison.OrdinalIgnoreCase))
-                {
-                    AddGroupByCaseResult(groupColumns, conditional.ElseResult);
-                }
-            }
-
-            // =========================================
-            // 4. GROUP BY EXPLÍCITO
-            // =========================================
-            foreach (var column in request.GroupBy)
-            {
-                var key = ColumnKey(column.Schema,column.Table, column.Column);
-                groupColumns[key] =
-                    new ReportColumnReference
-                    {
-                        Schema = column.Schema,
-                        Table = column.Table,
-                        Column = column.Column
-                    };
-            }
-
-            // =========================================
-            // SIN COLUMNAS PARA AGRUPAR
-            // =========================================
-            if (groupColumns.Count == 0)
-            {
-                return;
-            }
-
-            // =========================================
-            // GENERAR GROUP BY
-            // =========================================
-            sql.AppendLine();
-            sql.AppendLine();
-            sql.AppendLine(
-                "GROUP BY"
-            );
-
-            var expressions =
-                groupColumns.Values
-                    .Select(
-                        column =>
+                        if (
+                            caseWhen.Result != null &&
+                            string.Equals(
+                                caseWhen.Result.ResultType,
+                                "COLUMN",
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        )
                         {
-                            var alias = GetTableAlias(aliases,column.Schema,column.Table);
-                            return $"    {Quote(alias)}.{Quote(column.Column)}";
+                            AddGroupByCaseResult(groupColumns, caseWhen.Result);
                         }
-                    );
+                    }
 
-            sql.Append(string.Join("," + Environment.NewLine, expressions));
+                    if (
+                        conditional.ElseResult != null &&
+                        string.Equals(
+                            conditional.ElseResult.ResultType,
+                            "COLUMN",
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                    {
+                        AddGroupByCaseResult(groupColumns, conditional.ElseResult);
+                    }
+                }
+
+                // =========================================
+                // GROUP BY EXPLÍCITO
+                // =========================================
+                foreach (var column in request.GroupBy)
+                {
+                    var key =
+                        SourceColumnKey(
+                            column.SourceId,
+                            column.Schema,
+                            column.Table,
+                            column.Column
+                        );
+
+                    groupColumns[key] =
+                        new ReportColumnReference
+                        {
+                            SourceId = column.SourceId,
+                            Schema = column.Schema,
+                            Table = column.Table,
+                            Column = column.Column
+                        };
+                }
+
+
+                if (groupColumns.Count == 0)
+                {
+                    return;
+                }
+
+                sql.AppendLine();
+                sql.AppendLine();
+                sql.AppendLine("GROUP BY");
+
+                var expressions =
+                    groupColumns.Values
+                        .Select(
+                            column =>
+                            {
+                                var alias =
+                                    GetTableAlias(
+                                        aliases,
+                                        column.SourceId
+                                    );
+
+                                return
+                                    $"    {Quote(alias)}.{Quote(column.Column)}";
+                            }
+                        );
+
+                sql.Append(
+                    string.Join(
+                        "," + Environment.NewLine,
+                        expressions
+                    )
+                );
         }
 
-        private static string BuildConditionalColumnExpression(ReportConditionalColumn conditional, Dictionary<string, string> aliases, List<SqlParameter> parameters, ref int parameterIndex)
+        private static string BuildConditionalColumnExpression(
+            ReportConditionalColumn conditional,
+            Dictionary<string, string> aliases,
+            List<SqlParameter> parameters,
+            Dictionary<string, ReportColumnMetadata> metadata,
+            ref int parameterIndex)
         {
             if (conditional.Cases == null || conditional.Cases.Count == 0)
             {
@@ -1083,7 +1274,7 @@ namespace SqlDataImporter.Services
                     throw new InvalidOperationException($"Un WHEN de la columna '{conditional.Alias}' " + "no contiene condiciones.");
                 }
 
-                var condition = BuildMetricConditions(caseWhen.Conditions, aliases, parameters, ref parameterIndex);
+                var condition = BuildMetricConditions(caseWhen.Conditions, aliases, parameters, metadata, ref parameterIndex);
                 var result = BuildCaseResultExpression(caseWhen.Result, aliases, parameters,ref parameterIndex);
                 sql.Append($" WHEN {condition} THEN {result}");
             }
@@ -1117,7 +1308,7 @@ namespace SqlDataImporter.Services
                 // =====================================
                 case "COLUMN":
                     {
-                        var tableAlias = GetTableAlias(aliases, result.Schema, result.Table);
+                        var tableAlias = GetTableAlias(aliases, result.SourceId);
                         return $"{Quote(tableAlias)}.{Quote(result.Column)}";
                     }
 
@@ -1175,62 +1366,420 @@ namespace SqlDataImporter.Services
             }
         }
 
-        private static void ValidateConditionalColumn(ReportConditionalColumn conditional, Dictionary<string, ReportColumnMetadata> metadata)
+        private static void ValidateConditionalColumn(
+    ReportConditionalColumn conditional,
+    Dictionary<string, ReportColumnMetadata> metadata,
+    Dictionary<string, (string Schema, string Table)> sources
+)
         {
-            if (string.IsNullOrWhiteSpace(conditional.Alias))
+            if (
+                string.IsNullOrWhiteSpace(
+                    conditional.Alias
+                )
+            )
             {
-                throw new InvalidOperationException("Toda columna condicional debe tener un alias.");
+                throw new InvalidOperationException(
+                    "Toda columna condicional debe tener un alias."
+                );
             }
 
-            if (conditional.Cases == null || conditional.Cases.Count == 0)
+
+            if (
+                conditional.Cases == null ||
+                conditional.Cases.Count == 0
+            )
             {
-                throw new InvalidOperationException($"La columna condicional '{conditional.Alias}' " + "debe contener al menos un WHEN.");
+                throw new InvalidOperationException(
+                    $"La columna condicional '{conditional.Alias}' " +
+                    "debe contener al menos un WHEN."
+                );
             }
 
-            foreach (var caseWhen in conditional.Cases)
+
+            foreach (
+                var caseWhen
+                in conditional.Cases
+            )
             {
-                if (caseWhen.Conditions == null || caseWhen.Conditions.Count == 0)
+                if (
+                    caseWhen.Conditions == null ||
+                    caseWhen.Conditions.Count == 0
+                )
                 {
-                    throw new InvalidOperationException($"La columna condicional '{conditional.Alias}' " + "contiene un WHEN sin condiciones.");
+                    throw new InvalidOperationException(
+                        $"La columna condicional '{conditional.Alias}' " +
+                        "contiene un WHEN sin condiciones."
+                    );
                 }
 
-                foreach (var condition in caseWhen.Conditions)
+
+                foreach (
+                    var condition
+                    in caseWhen.Conditions
+                )
                 {
-                    ValidateColumn(condition.Schema, condition.Table, condition.Column, metadata);
+                    ValidateReference(
+                        condition,
+                        metadata,
+                        sources
+                    );
                 }
 
-                ValidateCaseResult(caseWhen.Result, metadata);
+
+                ValidateCaseResult(
+                    caseWhen.Result,
+                    metadata,
+                    sources
+                );
             }
 
-            ValidateCaseResult(conditional.ElseResult, metadata);
+
+            ValidateCaseResult(
+                conditional.ElseResult,
+                metadata,
+                sources
+            );
         }
 
-        private static void ValidateCaseResult(ReportCaseResult result, Dictionary<string, ReportColumnMetadata> metadata)
+        private static void ValidateCaseResult(
+    ReportCaseResult result,
+    Dictionary<string, ReportColumnMetadata> metadata,
+    Dictionary<string, (string Schema, string Table)> sources
+)
         {
-            var type = (result.ResultType ?? string.Empty).Trim().ToUpperInvariant();
-
-            if (type != "VALUE" && type != "COLUMN" && type != "NULL")
+            if (result == null)
             {
-                throw new InvalidOperationException($"Tipo de resultado CASE no permitido: {result.ResultType}");
+                throw new InvalidOperationException(
+                    "El resultado del CASE no está configurado."
+                );
             }
+
+
+            var type =
+                (result.ResultType ?? string.Empty)
+                    .Trim()
+                    .ToUpperInvariant();
+
+
+            if (
+                type != "VALUE" &&
+                type != "COLUMN" &&
+                type != "NULL"
+            )
+            {
+                throw new InvalidOperationException(
+                    $"Tipo de resultado CASE no permitido: {result.ResultType}"
+                );
+            }
+
 
             if (type == "COLUMN")
             {
-                ValidateColumn(result.Schema, result.Table, result.Column, metadata);
+                ValidateReference(
+                    result,
+                    metadata,
+                    sources
+                );
             }
         }
 
         private static void AddGroupByCaseResult(Dictionary<string, ReportColumnReference> columns, ReportCaseResult result)
         {
-            var key = ColumnKey(result.Schema, result.Table, result.Column);
+            var key =
+                SourceColumnKey(
+                    result.SourceId,
+                    result.Schema,
+                    result.Table,
+                    result.Column
+                );
 
             columns[key] =
                 new ReportColumnReference
                 {
+                    SourceId = result.SourceId,
                     Schema = result.Schema,
                     Table = result.Table,
                     Column = result.Column
                 };
+        }
+
+        private static SqlParameter CreateTypedParameter(string parameterName, string? value, ReportColumnMetadata metadata)
+        {
+            if (value == null)
+            {
+                return new SqlParameter(parameterName, DBNull.Value);
+            }
+
+            var type = metadata.DataType.Trim().ToLowerInvariant();
+
+            switch (type)
+            {
+                case "tinyint":
+                    return new SqlParameter(parameterName, SqlDbType.TinyInt)
+                    {
+                        Value = byte.Parse(value, CultureInfo.InvariantCulture)
+                    };
+
+                case "smallint":
+                    return new SqlParameter(parameterName, SqlDbType.SmallInt)
+                    {
+                        Value = short.Parse(value, CultureInfo.InvariantCulture)
+                    };
+
+                case "int":
+                    return new SqlParameter(parameterName, SqlDbType.Int)
+                    {
+                        Value = int.Parse(value,CultureInfo.InvariantCulture)
+                    };
+
+                case "bigint":
+                    return new SqlParameter(parameterName, SqlDbType.BigInt)
+                    {
+                        Value = long.Parse(value, CultureInfo.InvariantCulture)
+                    };
+
+                case "decimal":
+                case "numeric":
+                    {
+                        if (!TryParseDecimal(value, out var decimalValue))
+                        {
+                            throw new InvalidOperationException($"El valor '{value}' no es un número válido " + $"para {metadata.Schema}.{metadata.Table}.{metadata.Column}.");
+                        }
+                        return new SqlParameter(parameterName, SqlDbType.Decimal)
+                        {
+                            Precision = metadata.Precision,
+                            Scale = metadata.Scale,
+                            Value = decimalValue
+                        };
+                    }
+
+                case "money":
+                case "smallmoney":
+                    {
+                        if (!TryParseDecimal(value, out var moneyValue))
+                        {
+                            throw new InvalidOperationException($"El valor '{value}' no es un importe válido.");
+                        }
+                        return new SqlParameter(parameterName, type == "money" ? SqlDbType.Money : SqlDbType.SmallMoney)
+                        {
+                            Value = moneyValue
+                        };
+                    }
+
+                case "float":
+                    return new SqlParameter(parameterName, SqlDbType.Float)
+                    {
+                        Value = double.Parse(value,CultureInfo.InvariantCulture)
+                    };
+
+                case "real":
+                    return new SqlParameter(parameterName, SqlDbType.Real)
+                    {
+                        Value = float.Parse(value, CultureInfo.InvariantCulture)
+                    };
+
+                case "bit":
+                    {
+                        var bitValue = value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        return new SqlParameter(parameterName, SqlDbType.Bit)
+                        {
+                            Value = bitValue
+                        };
+                    }
+
+                case "date":
+                    {
+                        var date = ParseDateValue(value, metadata);
+                        return new SqlParameter(parameterName, SqlDbType.Date)
+                        {
+                            Value = date.Date
+                        };
+                    }
+
+                case "datetime":
+                case "smalldatetime":
+                case "datetime2":
+                    {
+                        var date = ParseDateValue(value, metadata);
+                        var sqlType =
+                            type switch
+                            {
+                                "datetime2" => SqlDbType.DateTime2,
+                                "smalldatetime" => SqlDbType.SmallDateTime,
+                                _ => SqlDbType.DateTime
+                            };
+
+                        return new SqlParameter(parameterName, sqlType)
+                        {
+                            Value = date
+                        };
+                    }
+
+                case "uniqueidentifier":
+                    {
+                        if (!Guid.TryParse(value, out var guid))
+                        {
+                            throw new InvalidOperationException(
+                                $"El valor '{value}' no es un GUID válido."
+                            );
+                        }
+
+                        return new SqlParameter(parameterName, SqlDbType.UniqueIdentifier)
+                        {
+                            Value = guid
+                        };
+                    }
+
+                case "varchar":
+                case "char":
+                case "text":
+                    return new SqlParameter(parameterName, SqlDbType.VarChar)
+                    {
+                        Value = value
+                    };
+
+                default:
+                    return new SqlParameter(parameterName, SqlDbType.NVarChar)
+                    {
+                        Value = value
+                    };
+            }
+        }
+
+        private static bool TryParseDecimal(string value, out decimal result)
+        {
+            if ( decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out result))
+            {
+                return true;
+            }
+
+            return decimal.TryParse(value, NumberStyles.Number, CultureInfo.GetCultureInfo("es-MX"),out result);
+        }
+
+        private static DateTime ParseDateValue(string value, ReportColumnMetadata metadata)
+        {
+            var formats =
+                new[]
+                {
+                    "yyyy-MM-dd",
+                    "yyyy-MM-ddTHH:mm",
+                    "yyyy-MM-ddTHH:mm:ss",
+                    "yyyy-MM-dd HH:mm",
+                    "yyyy-MM-dd HH:mm:ss"
+                };
+
+            if (DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+            {
+                return result;
+            }
+
+            // Formato mostrado al usuario en México.
+            if (DateTime.TryParse(value, CultureInfo.GetCultureInfo("es-MX"), DateTimeStyles.None,out result))
+            {
+                return result;
+            }
+
+            throw new InvalidOperationException($"El valor '{value}' no es una fecha válida " + $"para {metadata.Schema}.{metadata.Table}.{metadata.Column}.");
+        }
+
+        private static Dictionary<string, (string Schema, string Table)>BuildSourceMap(ReportQueryRequest request)
+        {
+            var sources =
+                new Dictionary<
+                    string,
+                    (string Schema, string Table)
+                >(
+                    StringComparer.OrdinalIgnoreCase
+                );
+
+
+            var mainSourceId =
+                GetMainSourceId(
+                    request
+                );
+
+
+            sources.Add(
+                mainSourceId,
+                (
+                    request.MainSchema,
+                    request.MainTable
+                )
+            );
+
+
+            foreach (var join in request.Joins)
+            {
+                if (
+                    string.IsNullOrWhiteSpace(
+                        join.RightSourceId
+                    )
+                )
+                {
+                    throw new InvalidOperationException(
+                        "Una relación no tiene identificador de fuente."
+                    );
+                }
+
+
+                if (
+                    sources.ContainsKey(
+                        join.RightSourceId
+                    )
+                )
+                {
+                    throw new InvalidOperationException(
+                        $"La fuente '{join.RightSourceId}' está duplicada."
+                    );
+                }
+
+
+                sources.Add(
+                    join.RightSourceId,
+                    (
+                        join.RightSchema,
+                        join.RightTable
+                    )
+                );
+            }
+
+
+            return sources;
+        }
+
+        private static void ValidateSource(string sourceId, string schema, string table, Dictionary<string, (string Schema, string Table)> sources)
+        {
+            if (string.IsNullOrWhiteSpace(sourceId))
+            {
+                throw new InvalidOperationException($"La referencia {schema}.{table} no tiene SourceId.");
+            }
+
+            if (!sources.TryGetValue(sourceId, out var source))
+            {
+                throw new InvalidOperationException($"La fuente '{sourceId}' no forma parte de la consulta.");
+            }
+
+            if (
+                !string.Equals(source.Schema, schema, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(source.Table, table, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"La fuente '{sourceId}' corresponde a " +
+                    $"{source.Schema}.{source.Table}, " +
+                    $"no a {schema}.{table}."
+                );
+            }
+        }
+
+        private static string GetMainSourceId(ReportQueryRequest request)
+        {
+            return string.IsNullOrWhiteSpace(request.MainSourceId) ? "main" : request.MainSourceId;
+        }
+
+        private static void ValidateReference(DataBaseDto reference, Dictionary<string, ReportColumnMetadata> metadata, Dictionary<string, (string Schema, string Table)> sources)
+        {
+            ValidateSource(reference.SourceId, reference.Schema, reference.Table, sources);
+            ValidateColumn(reference.Schema, reference.Table, reference.Column, metadata);
         }
     }
 }
