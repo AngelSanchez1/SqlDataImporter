@@ -15,7 +15,7 @@
             confirmButtonText: "Aceptar"
         });
     },
-    warning: function (title,mmessage = "") {
+    warning: function (title,message = "") {
         return Swal.fire({
             icon: "warning",
             title: title,

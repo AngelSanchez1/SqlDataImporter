@@ -5,7 +5,6 @@
     let selectedTable = null;
     let databaseTables = [];
     const tableMetadata = new Map();
-
     const connectionForm = document.getElementById("connectionForm");
     const reportBuilderSection = document.getElementById("reportBuilderSection");
     const reportColumns = document.getElementById("reportColumns");
@@ -38,6 +37,18 @@
     const reportPreviewHead = document.getElementById("reportPreviewHead");
     const reportPreviewBody = document.getElementById("reportPreviewBody");
     const reportPreviewInfo = document.getElementById("reportPreviewInfo");
+    const joinsCountBadge = document.getElementById("joinsCountBadge");
+    const filtersCountBadge = document.getElementById("filtersCountBadge");
+    const concatCountBadge = document.getElementById("concatCountBadge");
+    const reportNameInput = document.getElementById("reportName");
+    const reportMetrics = document.getElementById("reportMetrics");
+    const reportMetricsEmpty = document.getElementById("reportMetricsEmpty");
+    const btnAddMetric = document.getElementById("btnAddMetric");
+    const metricsCountBadge = document.getElementById("metricsCountBadge");
+    const reportConditionalColumns = document.getElementById("reportConditionalColumns");
+    const reportConditionalColumnsEmpty = document.getElementById("reportConditionalColumnsEmpty");
+    const btnAddConditionalColumn = document.getElementById("btnAddConditionalColumn");
+    const conditionalColumnsCountBadge = document.getElementById("conditionalColumnsCountBadge");
 
     document.addEventListener(
         "sqlTargetSelected",
@@ -49,16 +60,13 @@
             tableMetadata.clear();
             reportDatabase.textContent = selectedDatabase;
             reportTable.textContent = `${selectedSchema}.${selectedTable}`;
-
-            reportBuilderSection.classList.remove(
-                "d-none"
-            );
-
+            reportBuilderSection.classList.remove("d-none");
             limpiarColumnas();
             limpiarJoins();
             limpiarFiltros();
+            limpiarMetricas();
+            limpiarColumnasCondicionales();
             limpiarColumnasConcatenadas();
-
             await cargarColumnas();
             await cargarTablasBaseDatos();
         }
@@ -67,7 +75,6 @@
     document.addEventListener(
         "sqlTargetCleared",
         function () {
-
             selectedDatabase = null;
             selectedSchema = null;
             selectedTable = null;
@@ -75,15 +82,14 @@
             tableMetadata.clear();
             reportDatabase.textContent = "";
             reportTable.textContent = "";
-
+            reportNameInput.value = "";
             limpiarColumnas();
             limpiarJoins();
             limpiarFiltros();
+            limpiarMetricas();
+            limpiarColumnasCondicionales();
             limpiarColumnasConcatenadas();
-
-            reportBuilderSection.classList.add(
-                "d-none"
-            );
+            reportBuilderSection.classList.add("d-none");
         }
     );
 
@@ -323,72 +329,45 @@
     // ESTADO
     // ==========================================
     function actualizarEstadoColumnas() {
-
-        const selected =
-            obtenerColumnasSeleccionadas();
-
-
-        const concatColumns =
-            obtenerColumnasConcatenadas();
-
-
-        const validConcatColumns =
-            concatColumns.filter(
-                item =>
-                    item.columns.length >= 2 &&
-                    item.alias.length > 0
+        const selected = obtenerColumnasSeleccionadas();
+        const concatColumns = obtenerColumnasConcatenadas();
+        const validConcatColumns = concatColumns.filter(item => item.columns.length >= 2 && item.alias.length > 0);
+        const metrics = obtenerMetricas();
+        const validMetrics =
+            metrics.filter(
+                metric =>
+                    metric.alias &&
+                    (
+                        (
+                            metric.function === "COUNT" &&
+                            !metric.column
+                        )
+                        ||
+                        metric.column
+                    )
             );
+        const conditionalColumns = obtenerColumnasCondicionales();
+        const validConditionalColumns = conditionalColumns.filter( item => item.alias && item.cases.length > 0);
+        const totalColumns = selected.length + validConcatColumns.length + validConditionalColumns.length + validMetrics.length;
 
-
-        const totalColumns =
-            selected.length +
-            validConcatColumns.length;
-
-
-        selectedColumnsCount.textContent =
-            totalColumns;
-
+        selectedColumnsCount.textContent = totalColumns;
 
         if (totalColumns === 0) {
-
-            selectedColumnsText.textContent =
-                "Seleccione al menos una columna.";
-
+            selectedColumnsText.textContent = "Seleccione al menos una columna.";
         }
         else {
+            const selectedTexts = [...selected];
 
-            const selectedTexts =
-                [...selected];
-
-
-            validConcatColumns.forEach(
-                item => {
-
-                    selectedTexts.push(
-                        item.alias
-                    );
-
-                }
-            );
-
-
-            selectedColumnsText.textContent =
-                selectedTexts.join(", ");
+            validConcatColumns.forEach(item => { selectedTexts.push(item.alias); });
+            validConditionalColumns.forEach( item => { selectedTexts.push(item.alias); });
+            validMetrics.forEach(metric => { selectedTexts.push(metric.alias); });
+            selectedColumnsText.textContent = selectedTexts.join(", ");
         }
 
-
-        const hasColumns =
-            totalColumns > 0;
-
-
-        btnPreviewReport.disabled =
-            !hasColumns;
-
-        btnExportExcel.disabled =
-            !hasColumns;
-
-        btnExportCsv.disabled =
-            !hasColumns;
+        const hasColumns = totalColumns > 0;
+        btnPreviewReport.disabled = !hasColumns;
+        btnExportExcel.disabled = !hasColumns;
+        btnExportCsv.disabled = !hasColumns;
     }
 
     // ==========================================
@@ -762,6 +741,8 @@
                 Configure la relación.
             </div>
         `;
+
+        actualizarBadge(joinsCountBadge, reportJoins.children.length);
     }
 
     reportJoins.addEventListener(
@@ -909,6 +890,8 @@
             if (reportJoins.children.length === 0) {
                 reportJoinsEmpty.classList.remove("d-none");
             }
+
+            actualizarBadge(joinsCountBadge, reportJoins.children.length);
         }
     );
 
@@ -920,15 +903,12 @@
     );
 
     function agregarFiltro() {
-
         reportFiltersEmpty.classList.add(
             "d-none"
         );
 
-        const filter =document.createElement("div");
-
+        const filter = document.createElement("div");
         filter.className = "report-query-item report-filter-item";
-
         const isFirst = reportFilters.querySelectorAll(".report-filter-item").length === 0;
 
         filter.innerHTML = `
@@ -1045,6 +1025,7 @@
 
         reportFilters.appendChild(filter);
         actualizarConectoresFiltros();
+        actualizarBadge(filtersCountBadge, reportFilters.children.length);
     }
 
     function obtenerOpcionesTablasConsulta() {
@@ -1375,17 +1356,21 @@
             if (reportFilters.children.length === 0) {
                 reportFiltersEmpty.classList.remove("d-none");
             }
+
+            actualizarBadge(filtersCountBadge, reportFilters.children.length);
         }
     );
 
     function limpiarJoins() {
         reportJoins.innerHTML = "";
         reportJoinsEmpty.classList.remove("d-none");
+        actualizarBadge(joinsCountBadge, 0);
     }
 
     function limpiarFiltros() {
         reportFilters.innerHTML = "";
         reportFiltersEmpty.classList.remove("d-none");
+        actualizarBadge(filtersCountBadge, 0);
     }
 
     btnPreviewReport.addEventListener(
@@ -1393,6 +1378,12 @@
         async function () {
 
             const request = construirReportRequest();
+            const validation = validarConfiguracionReporte(request);
+
+            if (!validation.valid) {
+                await AppAlert.warning("Configuración incompleta", validation.message);
+                return;
+            }
 
             try {
 
@@ -1479,20 +1470,26 @@
     btnExportExcel.addEventListener(
         "click",
         async function () {
-            await descargarReporte(exportExcelUrl, "Reporte.xlsx");
+            await descargarReporte(exportExcelUrl, `${obtenerNombreReporte()}.xlsx`);
         }
     );
 
     btnExportCsv.addEventListener(
         "click",
         async function () {
-            await descargarReporte(exportCsvUrl, "Reporte.csv");
+            await descargarReporte(exportCsvUrl,  `${obtenerNombreReporte()}.csv`);
         }
     );
 
     async function descargarReporte(url, defaultFileName) {
 
         const request = construirReportRequest();
+        const validation = validarConfiguracionReporte(request);
+
+        if (!validation.valid) {
+            await AppAlert.warning("Configuración incompleta", validation.message);
+            return;
+        }
 
         try {
 
@@ -1568,9 +1565,15 @@
             mainTable: selectedTable,
             columns: obtenerColumnasReporte(),
             concatColumns: obtenerColumnasConcatenadas(),
+            conditionalColumns: obtenerColumnasCondicionales(),
+            metrics: obtenerMetricas(),
             joins: obtenerJoins(),
             filters: obtenerFiltros(),
-            orderBy: []
+            groupBy: [],
+            having: [],
+            parameters: [],
+            orderBy: [],
+            nombreReporte: obtenerNombreReporte()
         };
     }
 
@@ -1896,37 +1899,31 @@
         `;
 
         reportConcatColumns.appendChild(item);
-
         actualizarEstadoColumnas();
+        actualizarBadge(concatCountBadge, reportConcatColumns.children.length);
     }
 
     reportConcatColumns.addEventListener(
         "change",
-        actualizarEstadoColumnas
+        actualizarEstadoColumnas()
     );
 
     reportConcatColumns.addEventListener(
         "input",
-        actualizarEstadoColumnas
+        actualizarEstadoColumnas()
     );
 
     reportConcatColumns.addEventListener(
         "click",
         function (event) {
 
-            const button =
-                event.target.closest(
-                    ".btn-remove-concat"
-                );
+            const button = event.target.closest(".btn-remove-concat");
 
             if (!button) {
                 return;
             }
 
-            const item =
-                button.closest(
-                    ".report-concat-item"
-                );
+            const item = button.closest(".report-concat-item");
 
             if (!item) {
                 return;
@@ -1934,18 +1931,12 @@
 
             item.remove();
 
-
-            if (
-                reportConcatColumns.children.length === 0
-            ) {
-
-                reportConcatColumnsEmpty.classList.remove(
-                    "d-none"
-                );
+            if (reportConcatColumns.children.length === 0) {
+                reportConcatColumnsEmpty.classList.remove("d-none");
             }
 
-
             actualizarEstadoColumnas();
+            actualizarBadge(concatCountBadge, reportConcatColumns.children.length);
         }
     );
 
@@ -2001,5 +1992,1867 @@
     function limpiarColumnasConcatenadas() {
         reportConcatColumns.innerHTML = "";
         reportConcatColumnsEmpty.classList.remove("d-none");
+        actualizarBadge(concatCountBadge, 0);
+    }
+
+    function validarConfiguracionReporte(request) {
+
+        if (
+            request.columns.length === 0 &&
+            request.concatColumns.length === 0 &&
+            request.conditionalColumns.length === 0 &&
+            request.metrics.length === 0
+        ) {
+            return {
+                valid: false,
+                message: "Seleccione al menos una columna, métrica o columna calculada para el reporte."
+            };
+        }
+
+        for (let i = 0; i < request.joins.length; i++) {
+            const join = request.joins[i];
+
+            if (!join.leftSchema || !join.leftTable || !join.leftColumn || !join.rightSchema || !join.rightTable || !join.rightColumn) {
+                return {
+                    valid: false,
+                    message: `La relación ${i + 1} está incompleta. ` + "Seleccione ambas tablas y ambas columnas."
+                };
+            }
+        }
+
+        for (let i = 0; i < request.concatColumns.length; i++) {
+            const concat = request.concatColumns[i];
+
+            if (concat.columns.length < 2) {
+                return {
+                    valid: false,
+                    message: `La columna combinada ${i + 1} debe contener al menos dos columnas.`
+                };
+            }
+
+            if (!concat.alias || !concat.alias.trim()) {
+                return {
+                    valid: false,
+                    message: `La columna combinada ${i + 1} necesita un alias.`
+                };
+            }
+        }
+
+        for (let i = 0; i < request.filters.length; i++) {
+            const filter = request.filters[i];
+
+            if (!filter.schema || !filter.table || !filter.column || !filter.operator) {
+                return {
+                    valid: false,
+                    message: `El filtro ${i + 1} está incompleto.`
+                };
+            }
+
+            const noValue = filter.operator === "IS_NULL" || filter.operator === "IS_NOT_NULL";
+            const multiple = filter.operator === "IN" || filter.operator === "NOT_IN";
+
+            if (multiple && (!filter.values || filter.values.length === 0)) {
+                return {
+                    valid: false,
+                    message: `El filtro ${i + 1} requiere al menos un valor.`
+                };
+            }
+
+            if (!noValue && !multiple && (filter.value === null || filter.value === undefined || String(filter.value).trim() === "")) {
+                return {
+                    valid: false,
+                    message: `El filtro ${i + 1} requiere un valor.`
+                };
+            }
+        }
+
+        for (let i = 0; i < request.conditionalColumns.length; i++) {
+            const conditional = request.conditionalColumns[i];
+
+            if (!conditional.alias) {
+                return {
+                    valid: false,
+                    message: `La columna condicional ${i + 1} necesita un alias.`
+                };
+            }
+
+            if (!conditional.cases || conditional.cases.length === 0) {
+                return {
+                    valid: false,
+                    message: `La columna condicional '${conditional.alias}' necesita al menos un WHEN.`
+                };
+            }
+
+            for (let j = 0; j < conditional.cases.length; j++) {
+                const caseWhen = conditional.cases[j];
+
+                if (!caseWhen.conditions || caseWhen.conditions.length === 0) {
+                    return {
+                        valid: false,
+                        message: `El WHEN ${j + 1} de '${conditional.alias}' necesita al menos una condición.`
+                    };
+                }
+
+                for (let k = 0; k < caseWhen.conditions.length; k++) {
+                    const condition = caseWhen.conditions[k];
+
+                    if (
+                        !condition.schema ||
+                        !condition.table ||
+                        !condition.column ||
+                        !condition.operator
+                    ) {
+
+                        return {
+                            valid: false,
+                            message: `La condición ${k + 1} del WHEN ${j + 1} de '${conditional.alias}' está incompleta.`
+                        };
+                    }
+
+                    const noValue = condition.operator === "IS_NULL" || condition.operator === "IS_NOT_NULL";
+                    const multiple = condition.operator === "IN" || condition.operator === "NOT_IN";
+
+                    if (multiple && condition.values.length === 0) {
+                        return {
+                            valid: false,
+                            message: `La condición ${k + 1} del WHEN ${j + 1} necesita valores.`
+                        };
+                    }
+
+                    if (!noValue && !multiple && (condition.value === null || condition.value === undefined)) {
+                        return {
+                            valid: false,
+                            message: `La condición ${k + 1} del WHEN ${j + 1} necesita un valor.`
+                        };
+                    }
+                }
+
+                const resultValidation = validarResultadoCase(caseWhen.result, `THEN del WHEN ${ j + 1}`);
+
+                if (!resultValidation.valid) {
+                    return resultValidation;
+                }
+            }
+
+            const elseValidation = validarResultadoCase(conditional.elseResult,`ELSE de '${conditional.alias}'`);
+
+            if (!elseValidation.valid) {
+                return elseValidation;
+            }
+        }
+
+        return {valid: true};
+    }
+
+    function actualizarBadge(badge, count) {
+        badge.textContent = count;
+        badge.classList.toggle("has-items", count > 0);
+    }
+
+    function obtenerNombreReporte() {
+        const name = reportNameInput.value.trim();
+        return name.length > 0 ? name : "Reporte " + selectedTable;
+    }
+
+    function esTipoNumerico(type) {
+        return [
+            "tinyint",
+            "smallint",
+            "int",
+            "bigint",
+            "decimal",
+            "numeric",
+            "money",
+            "smallmoney",
+            "float",
+            "real"
+        ].includes(
+            type.toLowerCase()
+        );
+    }
+
+    btnAddMetric.addEventListener(
+        "click",
+        function () {
+            agregarMetrica();
+        }
+    );
+
+    function agregarMetrica() {
+        reportMetricsEmpty.classList.add("d-none");
+
+        const metric = document.createElement("div");
+        metric.className = "report-query-item report-metric-item";
+        metric.innerHTML = `
+            <div class="report-query-item-header">
+
+                <div>
+
+                    <div class="report-query-item-title">
+                        Métrica
+                    </div>
+
+                    <div class="text-muted small">
+                        Agregado o cálculo sobre una columna.
+                    </div>
+
+                </div>
+
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger
+                               btn-remove-metric">
+
+                    Quitar
+
+                </button>
+
+            </div>
+
+
+            <div class="report-metric-grid">
+
+                <div>
+
+                    <label class="report-field-label">
+                        Función
+                    </label>
+
+                    <select class="form-select metric-function">
+
+                        <option value="SUM">
+                            SUM - Suma
+                        </option>
+
+                        <option value="COUNT">
+                            COUNT - Conteo
+                        </option>
+
+                        <option value="AVG">
+                            AVG - Promedio
+                        </option>
+
+                        <option value="MIN">
+                            MIN - Mínimo
+                        </option>
+
+                        <option value="MAX">
+                            MAX - Máximo
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div>
+
+                    <label class="report-field-label">
+                        Tabla
+                    </label>
+
+                    <select class="form-select metric-table">
+
+                        <option value="">
+                            Seleccione tabla
+                        </option>
+
+                        ${obtenerOpcionesTablasConsulta()}
+
+                    </select>
+
+                </div>
+
+
+                <div>
+
+                    <label class="report-field-label">
+                        Columna
+                    </label>
+
+                    <select class="form-select metric-column"
+                            disabled>
+
+                        <option value="">
+                            Seleccione primero una tabla
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div>
+
+                    <label class="report-field-label">
+                        Alias
+                    </label>
+
+                    <input type="text"
+                           class="form-control metric-alias"
+                           placeholder="Ej. SaldoActual" />
+
+                </div>
+
+            </div>
+
+
+            <div class="report-metric-options mt-3">
+
+                <label class="form-check">
+
+                    <input type="checkbox"
+                           class="form-check-input metric-distinct">
+
+                    <span class="form-check-label">
+                        DISTINCT
+                    </span>
+
+                </label>
+
+
+                <label class="form-check">
+
+                    <input type="checkbox"
+                           class="form-check-input metric-null-zero"
+                           checked>
+
+                    <span class="form-check-label">
+                        Sustituir NULL por 0
+                    </span>
+
+                </label>
+
+
+                <label class="form-check metric-count-all-wrapper d-none">
+
+                    <input type="checkbox"
+                           class="form-check-input metric-count-all">
+
+                    <span class="form-check-label">
+                        Contar todos los registros COUNT(*)
+                    </span>
+
+                </label>
+
+            </div>
+
+
+            <div class="report-metric-arithmetic mt-3">
+
+                <div class="report-section-subtitle">
+                    Operación adicional
+                </div>
+
+                <div class="text-muted small mb-2">
+                    Opcional. Permite dividir, multiplicar,
+                    sumar o restar un valor.
+                </div>
+
+
+                <div class="report-query-grid">
+
+                    <div>
+
+                        <label class="report-field-label">
+                            Operación
+                        </label>
+
+                        <select class="form-select metric-arithmetic-operator">
+
+                            <option value="">
+                                Ninguna
+                            </option>
+
+                            <option value="+">
+                                Sumar (+)
+                            </option>
+
+                            <option value="-">
+                                Restar (-)
+                            </option>
+
+                            <option value="*">
+                                Multiplicar (*)
+                            </option>
+
+                            <option value="/">
+                                Dividir (/)
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div>
+
+                        <label class="report-field-label">
+                            Valor
+                        </label>
+
+                        <input type="number"
+                               step="any"
+                               class="form-control metric-arithmetic-value"
+                               disabled />
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="report-metric-conditions mt-4">
+
+                <div class="d-flex
+                            justify-content-between
+                            align-items-center
+                            mb-2">
+
+                    <div>
+
+                        <div class="report-section-subtitle">
+                            Condiciones del cálculo
+                        </div>
+
+                        <div class="text-muted small">
+                            Genera expresiones CASE WHEN.
+                        </div>
+
+                    </div>
+
+
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary
+                                   btn-add-metric-condition">
+
+                        <i class="fa fa-plus"></i>
+                        Agregar condición
+
+                    </button>
+
+                </div>
+
+
+                <div class="metric-conditions">
+                </div>
+
+
+                <div class="metric-conditions-empty
+                            alert alert-light border">
+
+                    La métrica se calculará sobre todos
+                    los registros seleccionados.
+
+                </div>
+
+            </div>
+        `;
+
+        reportMetrics.appendChild(metric);
+
+        actualizarBadge(metricsCountBadge, reportMetrics.children.length);
+        actualizarEstadoMetrica(metric);
+        actualizarEstadoColumnas();
+    }
+
+    async function cargarColumnasMetrica(metric) {
+
+        const tableOption = metric.querySelector(".metric-table").selectedOptions[0];
+        const schema = tableOption?.dataset.schema;
+        const table = tableOption?.dataset.table;
+        const functionName = metric.querySelector(".metric-function").value;
+        const countAll = metric.querySelector(".metric-count-all").checked;
+        const columnSelect = metric.querySelector(".metric-column");
+
+        if (countAll && functionName === "COUNT") {
+            columnSelect.innerHTML = `
+                <option value="">
+                    Todos los registros (*)
+                </option>
+            `;
+            columnSelect.disabled = true;
+            return;
+        }
+
+        if (!schema || !table) {
+            columnSelect.innerHTML = `
+                <option value="">
+                    Seleccione primero una tabla
+                </option>
+            `;
+            columnSelect.disabled = true;
+            return;
+        }
+
+        columnSelect.innerHTML = `
+            <option value="">
+                Cargando...
+            </option>
+        `;
+
+        columnSelect.disabled = true;
+
+        try {
+            const columns = await obtenerColumnasTabla(schema, table);
+            const available =
+                columns.filter(
+                    column => {
+
+                        if (functionName === "SUM" || functionName === "AVG") {
+                            return esTipoNumerico(column.dataType);
+                        }
+
+                        return true;
+                    }
+                );
+
+            columnSelect.innerHTML = `
+                <option value="">
+                    Seleccione columna
+                </option>
+
+                ${available
+                    .map(
+                        column => `
+                            <option
+                                value="${column.name}"
+                                data-type="${column.dataType}">
+
+                                ${column.name}
+                                (${column.dataType})
+
+                            </option>
+                        `
+                    )
+                    .join("")}
+            `;
+
+            columnSelect.disabled = false;
+        }
+        catch (error) {
+            await AppAlert.error("No fue posible cargar las columnas", error.message);
+        }
+    }
+
+    reportMetrics.addEventListener(
+        "change",
+        async function (event) {
+
+            const metric = event.target.closest(".report-metric-item");
+
+            if (!metric) {
+                return;
+            }
+
+            // ======================================
+            // FUNCIÓN
+            // ======================================
+            if (event.target.classList.contains("metric-function")) {
+                actualizarEstadoMetrica(metric);
+                await cargarColumnasMetrica(metric);
+            }
+
+            // ======================================
+            // TABLA
+            // ======================================
+            if (event.target.classList.contains("metric-table")) {
+                await cargarColumnasMetrica(metric);
+            }
+
+            // ======================================
+            // COUNT(*)
+            // ======================================
+            if (event.target.classList.contains("metric-count-all")) {
+                actualizarEstadoMetrica(metric);
+                await cargarColumnasMetrica(metric);
+            }
+
+            // ======================================
+            // OPERACIÓN
+            // ======================================
+            if (event.target.classList.contains("metric-arithmetic-operator")) {
+                const valueInput = metric.querySelector(".metric-arithmetic-value");
+                valueInput.disabled = !event.target.value;
+
+                if (!event.target.value) {
+                    valueInput.value = "";
+                }
+            }
+            
+            if (event.target.classList.contains("metric-condition-table")) {
+
+                const condition = event.target.closest(".metric-condition-item");
+                const option = event.target.selectedOptions[0];
+                const schema = option?.dataset.schema;
+                const table = option?.dataset.table;
+                const columnSelect = condition.querySelector(".metric-condition-column");
+                columnSelect.disabled = true;
+
+                if (!schema || !table) {
+                    return;
+                }
+
+                const columns = await obtenerColumnasTabla(schema, table);
+
+                columnSelect.innerHTML = `
+                    <option value="">
+                        Seleccione columna
+                    </option>
+
+                    ${columns
+                        .map(
+                            column => `
+                                <option
+                                    value="${column.name}"
+                                    data-schema="${schema}"
+                                    data-table="${table}"
+                                    data-type="${column.dataType}">
+
+                                    ${column.name}
+                                    (${column.dataType})
+
+                                </option>
+                            `
+                        )
+                        .join("")}
+                `;
+
+
+                columnSelect.disabled =
+                    false;
+            }
+
+            if (event.target.classList.contains("metric-condition-column")) {
+                const condition = event.target.closest(".metric-condition-item");
+                const option = event.target.selectedOptions[0];
+                const type = option?.dataset.type;
+                const operator = condition.querySelector(".metric-condition-operator");
+                const input = condition.querySelector(".metric-condition-value");
+
+                if (!type) {
+                    operator.disabled = true;
+                    input.disabled = true;
+                    return;
+                }
+
+                operator.innerHTML =
+                    obtenerOperadores(type)
+                        .map(
+                            item => `
+                                <option value="${item[0]}">
+                                    ${item[1]}
+                                </option>
+                            `
+                        )
+                        .join("");
+
+                operator.disabled =false;
+                input.disabled = false;
+
+                configurarInputFiltro(input, type);
+                actualizarValorCondicionMetrica(condition);
+            }
+
+            if (event.target.classList.contains("metric-condition-operator")) {
+                const condition = event.target.closest(".metric-condition-item");
+                actualizarValorCondicionMetrica(condition);
+            }
+
+            actualizarEstadoColumnas();
+        }
+    );
+
+    function actualizarEstadoMetrica(metric) {
+
+        const functionName = metric.querySelector(".metric-function").value;
+        const countAllWrapper = metric.querySelector(".metric-count-all-wrapper");
+        const countAll = metric.querySelector(".metric-count-all");
+        const nullZero = metric.querySelector(".metric-null-zero");
+        const arithmeticOperator = metric.querySelector(".metric-arithmetic-operator");
+        const arithmeticValue = metric.querySelector(".metric-arithmetic-value");
+
+        if (functionName === "COUNT") {
+            countAllWrapper.classList.remove("d-none");
+            nullZero.checked = false;
+            nullZero.disabled = true;
+            arithmeticOperator.value = "";
+            arithmeticOperator.disabled = true;
+            arithmeticValue.value = "";
+            arithmeticValue.disabled = true;
+        }
+        else {
+            countAllWrapper.classList.add("d-none");
+            countAll.checked = false;
+            nullZero.disabled = false;
+            arithmeticOperator.disabled = false;
+            arithmeticValue.disabled = !arithmeticOperator.value;
+        }
+    }
+
+    reportMetrics.addEventListener(
+        "click",
+        function (event) {
+
+            const addButton = event.target.closest(".btn-add-metric-condition");
+
+            if (addButton) {
+                const metric = addButton.closest(".report-metric-item");
+                agregarCondicionMetrica(metric);
+                return;
+            }
+
+            const removeMetric = event.target.closest(".btn-remove-metric");
+
+            if (removeMetric) {
+                removeMetric.closest(".report-metric-item").remove();
+
+                if (reportMetrics.children.length === 0) {
+                    reportMetricsEmpty.classList.remove("d-none");
+                }
+
+                actualizarBadge(metricsCountBadge, reportMetrics.children.length);
+                actualizarEstadoColumnas();
+                return;
+            }
+
+
+            const removeCondition = event.target.closest(".btn-remove-metric-condition");
+
+            if (removeCondition) {
+
+                const metric = removeCondition.closest(".report-metric-item");
+
+                removeCondition.closest(".metric-condition-item").remove();
+                actualizarConectoresCondicionesMetrica(metric);
+                actualizarEstadoCondicionesMetrica(metric);
+            }
+        }
+    );
+
+    function agregarCondicionMetrica(metric) {
+
+        const container = metric.querySelector(".metric-conditions");
+        const empty = metric.querySelector(".metric-conditions-empty");
+
+        empty.classList.add("d-none");
+
+        const isFirst = container.querySelectorAll(".metric-condition-item").length === 0;
+        const condition = document.createElement("div");
+
+        condition.className = "metric-condition-item";
+        condition.innerHTML = `
+            <div class="metric-condition-grid">
+
+                <div>
+
+                    <label class="report-field-label">
+                        Condición
+                    </label>
+
+                    <select class="form-select
+                                   metric-condition-logical"
+                            ${isFirst ? "disabled" : ""}>
+
+                        <option value="AND">
+                            AND
+                        </option>
+
+                        <option value="OR">
+                            OR
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div>
+
+                    <label class="report-field-label">
+                        Tabla
+                    </label>
+
+                    <select class="form-select
+                                   metric-condition-table">
+
+                        <option value="">
+                            Seleccione tabla
+                        </option>
+
+                        ${obtenerOpcionesTablasConsulta()}
+
+                    </select>
+
+                </div>
+
+
+                <div>
+
+                    <label class="report-field-label">
+                        Columna
+                    </label>
+
+                    <select class="form-select
+                                   metric-condition-column"
+                            disabled>
+
+                        <option value="">
+                            Seleccione tabla
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div>
+
+                    <label class="report-field-label">
+                        Operador
+                    </label>
+
+                    <select class="form-select
+                                   metric-condition-operator"
+                            disabled>
+
+                        <option value="">
+                            Seleccione columna
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div>
+
+                    <label class="report-field-label">
+                        Valor
+                    </label>
+
+                    <input type="text"
+                           class="form-control
+                                  metric-condition-value"
+                           disabled />
+
+                </div>
+
+
+                <div class="metric-condition-remove">
+
+                    <button type="button"
+                            class="btn btn-sm btn-outline-danger
+                                   btn-remove-metric-condition">
+
+                        <i class="fa fa-trash"></i>
+
+                    </button>
+
+                </div>
+
+            </div>
+        `;
+
+        container.appendChild(condition);
+        actualizarConectoresCondicionesMetrica(metric);
+        actualizarEstadoCondicionesMetrica(metric);
+    }
+
+    function actualizarConectoresCondicionesMetrica(metric) {
+        const conditions = Array.from(metric.querySelectorAll(".metric-condition-item"));
+
+        conditions.forEach(
+            (condition, index) => {
+
+                const logical = condition.querySelector(".metric-condition-logical");
+
+                if (index === 0) {
+                    logical.value = "AND";
+                    logical.disabled = true;
+                }
+                else {
+                    logical.disabled = false;
+                }
+            }
+        );
+    }
+
+    function actualizarEstadoCondicionesMetrica(metric) {
+        const container = metric.querySelector(".metric-conditions");
+        const empty = metric.querySelector(".metric-conditions-empty");
+
+        empty.classList.toggle("d-none", container.children.length > 0);
+    }
+
+    function obtenerMetricas() {
+
+        return Array
+            .from(reportMetrics.querySelectorAll(".report-metric-item")
+            )
+            .map(
+                metric => {
+
+                    const functionName = metric.querySelector(".metric-function").value;
+                    const countAll = metric.querySelector(".metric-count-all").checked;
+                    const tableOption = metric.querySelector(".metric-table").selectedOptions[0];
+                    const arithmeticOperator = metric.querySelector(".metric-arithmetic-operator").value;
+                    const arithmeticValue = metric.querySelector(".metric-arithmetic-value").value;
+
+                    return {
+                        function: functionName,
+                        schema: countAll ? "" : tableOption?.dataset.schema ?? "",
+                        table: countAll ? "" : tableOption?.dataset.table ?? "",
+                        column: countAll ? "" : metric.querySelector(".metric-column").value,
+                        alias: metric.querySelector(".metric-alias").value.trim(),
+                        distinct: metric.querySelector(".metric-distinct").checked,
+                        nullAsZero: metric.querySelector(".metric-null-zero").checked,
+                        conditions: obtenerCondicionesMetrica(metric),
+                        arithmeticOperator: arithmeticOperator || null,
+                        arithmeticValue: arithmeticOperator && arithmeticValue !== "" ? Number(arithmeticValue) : null
+                    };
+                }
+            );
+    }
+
+    function obtenerCondicionesMetrica(metric) {
+        return Array
+            .from(metric.querySelectorAll(".metric-condition-item")
+            )
+            .map(
+                condition => {
+                    const column = condition.querySelector(".metric-condition-column").selectedOptions[0];
+                    const operator = condition.querySelector(".metric-condition-operator").value;
+                    const value = condition.querySelector(".metric-condition-value").value;
+                    const multiple = operator === "IN" || operator === "NOT_IN";
+
+                    return {
+                        logicalOperator: condition.querySelector(".metric-condition-logical").value,
+                        schema: column?.dataset.schema ?? "",
+                        table: column?.dataset.table ?? "",
+                        column: column?.value ?? "",
+                        operator: operator,
+                        value: multiple ? null : value,
+                        values: multiple ? value.split(",").map(x => x.trim()).filter(Boolean) : []
+                    };
+                }
+            );
+    }
+
+    function limpiarMetricas() {
+        reportMetrics.innerHTML ="";
+        reportMetricsEmpty.classList.remove("d-none");
+        actualizarBadge(metricsCountBadge, 0);
+    }
+
+    function actualizarValorCondicionMetrica(condition) {
+        const operator = condition.querySelector(".metric-condition-operator").value;
+        const input = condition.querySelector(".metric-condition-value");
+        const columnOption = condition.querySelector(".metric-condition-column").selectedOptions[0];
+        const type = columnOption?.dataset.type;
+        const noValue = operator === "IS_NULL" || operator === "IS_NOT_NULL";
+        const multipleValues = operator === "IN" || operator === "NOT_IN";
+
+        // ==========================================
+        // OPERADORES SIN VALOR
+        // ==========================================
+        if (noValue) {
+            input.disabled = true;
+            input.value = "";
+            input.placeholder = "";
+            return;
+        }
+
+        input.disabled = false;
+
+        // ==========================================
+        // IN / NOT IN
+        // ==========================================
+        if (multipleValues) {
+            input.type = "text";
+            input.removeAttribute("min");
+            input.removeAttribute("max");
+            input.removeAttribute("step");
+            input.placeholder = "Ej. 1, 2, 3";
+            return;
+        }
+
+        // ==========================================
+        // VALOR NORMAL
+        // ==========================================
+        input.placeholder = "";
+        if (type) {
+            configurarInputFiltro(input,type);
+        }
+    }
+
+    btnAddConditionalColumn.addEventListener(
+        "click",
+        function () {
+            agregarColumnaCondicional();
+        }
+    );
+
+    function agregarColumnaCondicional() {
+        reportConditionalColumnsEmpty.classList.add("d-none");
+
+        const item = document.createElement("div");
+
+        item.className ="report-query-item report-conditional-column-item";
+        item.innerHTML = `
+            <div class="report-query-item-header">
+
+                <div>
+                    <div class="report-query-item-title">
+                        Columna condicional
+                    </div>
+
+                    <div class="text-muted small">
+                        Genera una expresión CASE WHEN.
+                    </div>
+                </div>
+
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger
+                               btn-remove-conditional-column">
+
+                    Quitar
+
+                </button>
+
+            </div>
+
+
+            <div class="mb-3">
+
+                <label class="report-field-label">
+                    Alias de la columna
+                </label>
+
+                <input type="text"
+                       class="form-control conditional-column-alias"
+                       placeholder="Ej. Departamento" />
+
+            </div>
+
+
+            <div class="conditional-whens">
+            </div>
+
+
+            <div class="d-flex justify-content-end mb-3">
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary
+                               btn-add-conditional-when">
+
+                    <i class="fa fa-plus"></i>
+                    Agregar WHEN
+
+                </button>
+
+            </div>
+
+
+            <div class="conditional-else-section">
+
+                <div class="report-section-subtitle mb-2">
+                    ELSE
+                </div>
+
+                ${generarHtmlResultadoCase("conditional-else-result")}
+
+            </div>
+        `;
+
+        reportConditionalColumns.appendChild(item);
+        agregarWhenCondicional(item);
+
+        const elseEditor = item.querySelector(".conditional-else-result");
+        actualizarEstadoResultadoCase(elseEditor);
+        actualizarBadge(conditionalColumnsCountBadge, reportConditionalColumns.children.length);
+        actualizarEstadoColumnas();
+    }
+
+    function generarHtmlResultadoCase(extraClass = "") {
+        return `
+            <div class="case-result-editor ${extraClass}">
+
+                <div class="report-query-grid">
+
+                    <div>
+
+                        <label class="report-field-label">
+                            Tipo de resultado
+                        </label>
+
+                        <select class="form-select case-result-type">
+
+                            <option value="VALUE">
+                                Valor fijo
+                            </option>
+
+                            <option value="COLUMN">
+                                Otra columna
+                            </option>
+
+                            <option value="NULL">
+                                NULL
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="case-result-value-type-wrapper">
+
+                        <label class="report-field-label">
+                            Tipo del valor
+                        </label>
+
+                        <select class="form-select case-result-value-type">
+
+                            <option value="string">
+                                Texto
+                            </option>
+
+                            <option value="int">
+                                Entero
+                            </option>
+
+                            <option value="decimal">
+                                Decimal
+                            </option>
+
+                            <option value="date">
+                                Fecha
+                            </option>
+
+                            <option value="datetime">
+                                Fecha y hora
+                            </option>
+
+                            <option value="bit">
+                                Booleano
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+
+                <div class="case-result-value-fields mt-3">
+
+                    <label class="report-field-label">
+                        Valor
+                    </label>
+
+                    <input type="text"
+                           class="form-control case-result-value" />
+
+                </div>
+
+
+                <div class="case-result-column-fields
+                            report-query-grid
+                            mt-3
+                            d-none">
+
+                    <div>
+
+                        <label class="report-field-label">
+                            Tabla resultado
+                        </label>
+
+                        <select class="form-select case-result-table">
+
+                            <option value="">
+                                Seleccione tabla
+                            </option>
+
+                            ${obtenerOpcionesTablasConsulta()}
+
+                        </select>
+
+                    </div>
+
+
+                    <div>
+
+                        <label class="report-field-label">
+                            Columna resultado
+                        </label>
+
+                        <select class="form-select case-result-column"
+                                disabled>
+
+                            <option value="">
+                                Seleccione primero una tabla
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+            </div>
+        `;
+    }
+
+    function agregarWhenCondicional(conditionalColumn) {
+        const container = conditionalColumn.querySelector(".conditional-whens");
+        const when = document.createElement("div");
+
+        when.className = "conditional-when-item";
+
+        const number = container.querySelectorAll(".conditional-when-item").length + 1;
+
+        when.innerHTML = `
+            <div class="conditional-when-header">
+
+                <div class="report-section-subtitle">
+                    WHEN ${number}
+                </div>
+
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger
+                               btn-remove-conditional-when">
+
+                    Quitar WHEN
+
+                </button>
+
+            </div>
+
+            <div class="conditional-conditions">
+            </div>
+
+            <div class="d-flex
+                        justify-content-end
+                        mt-2
+                        mb-3">
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary
+                               btn-add-conditional-condition">
+
+                    <i class="fa fa-plus"></i>
+                    Agregar condición
+
+                </button>
+
+            </div>
+
+            <div class="conditional-then-section">
+
+                <div class="report-section-subtitle mb-2">
+                    THEN
+                </div>
+                ${generarHtmlResultadoCase("conditional-then-result")}
+            </div>
+        `;
+
+        container.appendChild(when);
+        agregarCondicionWhen(when);
+
+        const resultEditor = when.querySelector(".conditional-then-result");
+        actualizarEstadoResultadoCase(resultEditor);
+        actualizarNumerosWhen(conditionalColumn);
+    }
+
+    function actualizarNumerosWhen(conditionalColumn) {
+        const whens = conditionalColumn.querySelectorAll(".conditional-when-item");
+
+        whens.forEach(
+            (when, index) => {
+                const title = when.querySelector(".conditional-when-header .report-section-subtitle");
+                title.textContent = `WHEN ${index + 1}`;
+            }
+        );
+    }
+
+    function agregarCondicionWhen(when) {
+        const container = when.querySelector(".conditional-conditions");
+        const condition = document.createElement("div");
+
+        condition.className = "conditional-condition-item";
+
+        const isFirst = container.querySelectorAll( ".conditional-condition-item").length === 0;
+
+        condition.innerHTML = `
+            <div class="conditional-condition-grid">
+
+                <div>
+
+                    <label class="report-field-label">
+                        Condición
+                    </label>
+
+                    <select class="form-select conditional-condition-logical" ${isFirst ? "disabled" : ""}>
+                        <option value="AND">
+                            AND
+                        </option>
+
+                        <option value="OR">
+                            OR
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div>
+
+                    <label class="report-field-label">
+                        Tabla
+                    </label>
+
+                    <select class="form-select conditional-condition-table">
+
+                        <option value="">
+                            Seleccione tabla
+                        </option>
+
+                        ${obtenerOpcionesTablasConsulta()}
+
+                    </select>
+
+                </div>
+
+                <div>
+
+                    <label class="report-field-label">
+                        Columna
+                    </label>
+
+                    <select class="form-select
+                                   conditional-condition-column"
+                            disabled>
+
+                        <option value="">
+                            Seleccione primero una tabla
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div>
+
+                    <label class="report-field-label">
+                        Operador
+                    </label>
+
+                    <select class="form-select
+                                   conditional-condition-operator"
+                            disabled>
+
+                        <option value="">
+                            Seleccione columna
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div>
+
+                    <label class="report-field-label">
+                        Valor
+                    </label>
+
+                    <input type="text"
+                           class="form-control
+                                  conditional-condition-value"
+                           disabled />
+
+                </div>
+
+                <div class="conditional-condition-remove">
+
+                    <button type="button"
+                            class="btn btn-sm btn-outline-danger
+                                   btn-remove-conditional-condition">
+
+                        <i class="fa fa-trash"></i>
+
+                    </button>
+
+                </div>
+
+            </div>
+        `;
+
+        container.appendChild(condition);
+        actualizarConectoresWhen(when);
+    }
+
+    function actualizarConectoresWhen(when) {
+        const conditions = Array.from(when.querySelectorAll(".conditional-condition-item"));
+
+        conditions.forEach(
+            (condition, index) => {
+                const logical = condition.querySelector(".conditional-condition-logical");
+
+                if (index === 0) {
+                    logical.value = "AND";
+                    logical.disabled = true;
+                }
+                else {
+                    logical.disabled = false;
+                }
+            }
+        );
+    }
+
+    reportConditionalColumns.addEventListener(
+        "click",
+        function (event) {
+
+            // ======================================
+            // NUEVO WHEN
+            // ======================================
+            const addWhen = event.target.closest(".btn-add-conditional-when");
+
+            if (addWhen) {
+                const conditional = addWhen.closest(".report-conditional-column-item");
+                agregarWhenCondicional(conditional);
+                actualizarEstadoColumnas();
+                return;
+            }
+
+            // ======================================
+            // NUEVA CONDICIÓN
+            // ======================================
+            const addCondition = event.target.closest(".btn-add-conditional-condition");
+
+            if (addCondition) {
+                const when = addCondition.closest(".conditional-when-item" );
+                agregarCondicionWhen(when);
+                return;
+            }
+
+            // ======================================
+            // QUITAR CONDICIÓN
+            // ======================================
+            const removeCondition = event.target.closest(".btn-remove-conditional-condition");
+
+            if (removeCondition) {
+                const when = removeCondition.closest(".conditional-when-item");
+                removeCondition.closest(".conditional-condition-item").remove();
+                actualizarConectoresWhen(when);
+                return;
+            }
+
+            // ======================================
+            // QUITAR WHEN
+            // ======================================
+            const removeWhen = event.target.closest(".btn-remove-conditional-when");
+
+            if (removeWhen) {
+                const conditional = removeWhen.closest(".report-conditional-column-item");
+                removeWhen.closest(".conditional-when-item").remove();
+                actualizarNumerosWhen(conditional);
+                actualizarEstadoColumnas();
+                return;
+            }
+
+            // ======================================
+            // QUITAR COLUMNA CONDICIONAL
+            // ======================================
+            const removeColumn = event.target.closest(".btn-remove-conditional-column");
+
+            if (removeColumn) {
+                removeColumn.closest(".report-conditional-column-item").remove();
+
+                if (reportConditionalColumns.children.length === 0) {
+                    reportConditionalColumnsEmpty.classList.remove("d-none");
+                }
+
+                actualizarBadge(conditionalColumnsCountBadge, reportConditionalColumns.children.length);
+                actualizarEstadoColumnas();
+            }
+        }
+    );
+
+    reportConditionalColumns.addEventListener(
+        "change",
+        async function (event) {
+            // ======================================
+            // TABLA DE CONDICIÓN
+            // ======================================
+            if (event.target.classList.contains("conditional-condition-table")) {
+                const condition = event.target.closest(".conditional-condition-item");
+                const option = event.target.selectedOptions[0];
+                const schema = option?.dataset.schema;
+                const table = option?.dataset.table;
+                const columnSelect = condition.querySelector(".conditional-condition-column");
+                const operatorSelect = condition.querySelector(".conditional-condition-operator");
+                const input = condition.querySelector(".conditional-condition-value");
+                columnSelect.disabled = true;
+                operatorSelect.disabled = true;
+                input.disabled = true;
+                columnSelect.innerHTML = `
+                    <option value="">
+                        Cargando...
+                    </option>
+                `;
+
+                if (!schema || !table) {
+                    return;
+                }
+
+                try {
+                    const columns = await obtenerColumnasTabla(schema, table);
+
+                    columnSelect.innerHTML = `
+                        <option value="">
+                            Seleccione columna
+                        </option>
+
+                        ${columns
+                            .map(
+                                column => `
+                                    <option
+                                        value="${column.name}"
+                                        data-schema="${schema}"
+                                        data-table="${table}"
+                                        data-type="${column.dataType}">
+                                        ${column.name}
+                                        (${column.dataType})
+                                    </option>
+                                `
+                            )
+                            .join("")}
+                    `;
+
+                    columnSelect.disabled = false;
+                }
+                catch (error) {
+                    await AppAlert.error("No fue posible cargar las columnas", error.message);
+                }
+            }
+
+            // ======================================
+            // COLUMNA DE CONDICIÓN
+            // ======================================
+            if (event.target.classList.contains("conditional-condition-column")) {
+                const condition = event.target.closest(".conditional-condition-item");
+                const option = event.target.selectedOptions[0];
+                const type = option?.dataset.type;
+                const operator = condition.querySelector(".conditional-condition-operator");
+                const input = condition.querySelector(".conditional-condition-value");
+
+                if (!type) {
+                    operator.disabled = true;
+                    input.disabled = true;
+                    return;
+                }
+
+                operator.innerHTML = obtenerOperadores(type)
+                        .map(
+                            item => `
+                                <option value="${item[0]}">
+                                    ${item[1]}
+                                </option>
+                            `
+                        )
+                        .join("");
+                operator.disabled = false;
+                input.disabled = false;
+                configurarInputFiltro(input, type);
+                actualizarValorCondicionCase(condition);
+            }
+
+            // ======================================
+            // OPERADOR DE CONDICIÓN
+            // ======================================
+            if (event.target.classList.contains("conditional-condition-operator")) {
+                const condition = event.target.closest(".conditional-condition-item");
+                actualizarValorCondicionCase(condition);
+            }
+
+            // ======================================
+            // TIPO RESULTADO THEN / ELSE
+            // ======================================
+            if (event.target.classList.contains("case-result-type")) {
+                const editor = event.target.closest(".case-result-editor");
+                actualizarEstadoResultadoCase(editor);
+            }
+
+            // ======================================
+            // TIPO DE VALOR
+            // ======================================
+            if (event.target.classList.contains("case-result-value-type")) {
+                const editor = event.target.closest(".case-result-editor");
+                configurarInputResultadoCase(editor);
+            }
+
+            // ======================================
+            // TABLA RESULTADO
+            // ======================================
+            if (event.target.classList.contains("case-result-table")) {
+                const editor = event.target.closest(".case-result-editor");
+                await cargarColumnasResultadoCase(editor);
+            }
+
+            actualizarEstadoColumnas();
+        }
+    );
+
+    function actualizarValorCondicionCase(condition) {
+        const operator = condition.querySelector(".conditional-condition-operator").value;
+        const input = condition.querySelector(".conditional-condition-value");
+        const columnOption = condition.querySelector(".conditional-condition-column").selectedOptions[0];
+        const type = columnOption?.dataset.type;
+        const noValue = operator === "IS_NULL" || operator === "IS_NOT_NULL";
+        const multiple = operator === "IN" ||operator === "NOT_IN";
+
+        if (noValue) {
+            input.disabled = true;
+            input.value = "";
+            input.placeholder = "";
+            return;
+        }
+
+        input.disabled = false;
+
+        if (multiple) {
+            input.type = "text";
+            input.removeAttribute("min");
+            input.removeAttribute("max");
+            input.removeAttribute("step");
+            input.placeholder = "Ej. 57, 58, 60";
+            return;
+        }
+
+        input.placeholder = "";
+
+        if (type) {
+            configurarInputFiltro(input, type);
+        }
+    }
+
+    function actualizarEstadoResultadoCase(editor) {
+        const type = editor.querySelector(".case-result-type").value;
+        const valueFields = editor.querySelector(".case-result-value-fields");
+        const valueTypeWrapper = editor.querySelector(".case-result-value-type-wrapper");
+        const columnFields = editor.querySelector(".case-result-column-fields");
+
+        if (type === "VALUE") {
+            valueFields.classList.remove("d-none");
+            valueTypeWrapper.classList.remove("d-none");
+            columnFields.classList.add("d-none");
+            configurarInputResultadoCase(editor);
+            return;
+        }
+
+        if (type === "COLUMN") {
+            valueFields.classList.add("d-none");
+            valueTypeWrapper.classList.add("d-none");
+            columnFields.classList.remove("d-none");
+            return;
+        }
+
+        // NULL
+        valueFields.classList.add("d-none");
+        valueTypeWrapper.classList.add("d-none");
+        columnFields.classList.add("d-none");
+    }
+
+    function configurarInputResultadoCase(editor) {
+        const type = editor.querySelector(".case-result-value-type").value;
+        const input = editor.querySelector(".case-result-value");
+        input.removeAttribute("min");
+        input.removeAttribute("max");
+        input.removeAttribute("step");
+
+        switch (type) {
+            case "int":
+                input.type = "number";
+                input.step = "1";
+                break;
+
+            case "decimal":
+                input.type = "number";
+                input.step = "any";
+                break;
+
+            case "date":
+                input.type = "date";
+                break;
+
+            case "datetime":
+                input.type = "datetime-local";
+                break;
+
+            case "bit":
+                input.type = "number";
+                input.min = "0";
+                input.max = "1";
+                input.step = "1";
+                break;
+
+            default:
+                input.type = "text";
+                break;
+        }
+    }
+
+    async function cargarColumnasResultadoCase(editor) {
+        const tableOption = editor.querySelector(".case-result-table").selectedOptions[0];
+        const schema = tableOption?.dataset.schema;
+        const table = tableOption?.dataset.table;
+        const columnSelect = editor.querySelector(".case-result-column" );
+        columnSelect.disabled = true;
+
+        if (!schema || !table) {
+            columnSelect.innerHTML = `
+                <option value="">
+                    Seleccione primero una tabla
+                </option>
+            `;
+            return;
+        }
+
+        columnSelect.innerHTML = `
+            <option value="">
+                Cargando...
+            </option>
+        `;
+
+        try {
+            const columns = await obtenerColumnasTabla(schema, table);
+
+            columnSelect.innerHTML = `
+                <option value="">
+                    Seleccione columna
+                </option>
+                ${columns
+                    .map(
+                        column => `
+                            <option value="${column.name}">
+                                ${column.name}
+                                (${column.dataType})
+                            </option>
+                        `
+                    )
+                    .join("")}
+            `;
+
+            columnSelect.disabled = false;
+        }
+        catch (error) {
+            await AppAlert.error("No fue posible cargar las columnas", error.message);
+        }
+    }
+
+    function obtenerColumnasCondicionales() {
+
+        return Array
+            .from(reportConditionalColumns.querySelectorAll(".report-conditional-column-item"))
+            .map(
+                conditional => {
+                    const cases = Array.from(conditional.querySelectorAll(".conditional-when-item"))
+                            .map(
+                                when => ({
+                                    conditions: obtenerCondicionesWhen(when),
+                                    result: obtenerResultadoCase(when.querySelector(".conditional-then-result"))
+                                })
+                            );
+
+                    return {
+                        alias: conditional.querySelector(".conditional-column-alias").value.trim(),
+                        cases: cases,
+                        elseResult: obtenerResultadoCase( conditional.querySelector(".conditional-else-result"))
+                    };
+                }
+            );
+    }
+
+    function obtenerCondicionesWhen(when) {
+        return Array.from(when.querySelectorAll(".conditional-condition-item"))
+            .map(
+                condition => {
+                    const column = condition.querySelector(".conditional-condition-column").selectedOptions[0];
+                    const operator = condition.querySelector(".conditional-condition-operator").value;
+                    const value = condition.querySelector(".conditional-condition-value").value;
+                    const multiple = operator === "IN" || operator === "NOT_IN";
+
+                    return {
+                        logicalOperator: condition.querySelector(".conditional-condition-logical").value,
+                        schema: column?.dataset.schema ?? "",
+                        table: column?.dataset.table ?? "",
+                        column: column?.value ?? "",
+                        operator: operator,
+                        value: multiple ? null : value,
+                        values: multiple ? value.split(",").map(x => x.trim()).filter(Boolean) : []
+                    };
+                }
+            );
+    }
+
+    function obtenerResultadoCase(editor) {
+        const resultType = editor.querySelector(".case-result-type").value;
+
+        if (resultType === "COLUMN") {
+            const table = editor.querySelector(".case-result-table").selectedOptions[0];
+
+            return {
+                resultType: "COLUMN",
+                value: null,
+                valueType: "string",
+                schema: table?.dataset.schema ?? "",
+                table: table?.dataset.table ?? "",
+                column: editor.querySelector(".case-result-column").value
+            };
+        }
+
+        if (resultType === "NULL") {
+            return {
+                resultType: "NULL",
+                value: null,
+                valueType: "string",
+                schema: "",
+                table: "",
+                column: ""
+            };
+        }
+
+        return {
+            resultType: "VALUE",
+            value: editor.querySelector(".case-result-value").value,
+            valueType: editor.querySelector(".case-result-value-type").value,
+            schema: "",
+            table: "",
+            column: ""
+        };
+    }
+
+    function validarResultadoCase(result, description) {
+
+        if (result.resultType === "COLUMN") {
+            if (!result.schema || !result.table || !result.column) {
+                return {
+                    valid: false,
+                    message: `${description}: seleccione la columna que será devuelta.`
+                };
+            }
+        }
+
+        return { valid: true };
+    }
+
+    function limpiarColumnasCondicionales() {
+        reportConditionalColumns.innerHTML = "";
+        reportConditionalColumnsEmpty.classList.remove("d-none");
+        actualizarBadge(conditionalColumnsCountBadge, 0);
     }
 })();

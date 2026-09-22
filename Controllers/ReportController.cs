@@ -106,12 +106,12 @@ namespace SqlDataImporter.Controllers
             {
                 var table = await _reportExecutionService.ExecuteAsync(request, false);
 
-                using var workbook = BuildExcel(table, request.Database);
+                using var workbook = BuildExcel(table, request.Database, request.NombreReporte);
                 using var stream = new MemoryStream();
 
                 workbook.SaveAs(stream);
 
-                var fileName = $"Reporte_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                var fileName = $"{request.NombreReporte}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
 
                 return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
@@ -137,7 +137,7 @@ namespace SqlDataImporter.Controllers
             {
                 var table = await _reportExecutionService.ExecuteAsync(request, false);
                 var bytes = BuildCsv(table);
-                var fileName = $"Reporte_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                var fileName = $"{request.NombreReporte}_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
 
                 return File(
                     bytes,
@@ -157,7 +157,7 @@ namespace SqlDataImporter.Controllers
             }
         }
 
-        private static XLWorkbook BuildExcel(DataTable table, string database)
+        private static XLWorkbook BuildExcel(DataTable table, string database, string nombreReporte)
         {
             var workbook = new XLWorkbook();
             var worksheet = workbook.Worksheets.Add("Reporte");
@@ -178,7 +178,7 @@ namespace SqlDataImporter.Controllers
 
             var title = worksheet.Cell(1, 1);
 
-            title.Value = "REPORTE DINÁMICO";
+            title.Value = nombreReporte;
             title.Style.Fill.BackgroundColor = navy;
             title.Style.Font.FontColor = XLColor.White;
             title.Style.Font.Bold = true;
